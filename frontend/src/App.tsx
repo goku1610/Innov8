@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import { sendFullSnapshot, sendPatchSnapshot } from './api';
+import { useVoiceRecording } from './hooks/useVoiceRecording';
+import { useTextToSpeech } from './hooks/useTextToSpeech';
+import { isVoiceSupported } from './services/sarvamApi';
 import './App.css';
 
 interface ExecutionResult {
@@ -65,7 +68,7 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      text: "Hi there! 👋 I'm your AI coding assistant. I can help you with the Two Sum problem and other coding concepts. What would you like to know?",
+      text: "Hi there! 👋 I'm your AI coding assistant. I can help you with the Two Sum problem and other coding concepts. What would you like to know? You can also use voice input by clicking the microphone button!",
       sender: 'bot',
       timestamp: new Date()
     }
@@ -73,6 +76,11 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Voice functionality hooks
+  const voiceRecording = useVoiceRecording();
+  const textToSpeech = useTextToSpeech();
+  const isVoiceSupportedBrowser = isVoiceSupported();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,24 +90,24 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputText.trim();
+    if (!textToSend || isLoading) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: textToSend,
       sender: 'user',
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
-    const currentInputText = inputText.trim();
     setInputText('');
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:3000/chat', {
-        message: currentInputText
+      const response = await axios.post('http://localhost:5000/chat', {
+        message: textToSend
       });
 
       const botMessage: ChatMessage = {
@@ -110,6 +118,21 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
       };
 
       setMessages(prev => [...prev, botMessage]);
+      
+      // Automatically speak the bot's response
+      if (response.data.response) {
+        // Try browser TTS first since it's more reliable
+        try {
+          await textToSpeech.speakWithBrowser(response.data.response);
+        } catch (browserTtsError) {
+          console.warn('Browser TTS failed, trying Sarvam TTS:', browserTtsError);
+          try {
+            await textToSpeech.speak(response.data.response);
+          } catch (sarvamTtsError) {
+            console.warn('Both TTS methods failed:', sarvamTtsError);
+          }
+        }
+      }
     } catch (error) {
       console.error('Failed to get AI response:', error);
       const errorMessage: ChatMessage = {
@@ -130,6 +153,51 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
       handleSendMessage();
     }
   };
+
+  // Voice recording handlers
+  const handleVoiceStart = async () => {
+    try {
+      voiceRecording.clearError();
+      textToSpeech.clearError();
+      await voiceRecording.startRecording();
+    } catch (error) {
+      console.error('Failed to start voice recording:', error);
+    }
+  };
+
+  const handleVoiceStop = async () => {
+    try {
+      let transcript = await voiceRecording.stopRecording();
+      
+      // If Sarvam API failed, try browser speech recognition as fallback
+      if (!transcript || transcript.trim() === '') {
+        console.log('Trying browser speech recognition as fallback...');
+        transcript = await voiceRecording.startBrowserRecording();
+      }
+      
+      if (transcript && transcript.trim()) {
+        // Send the transcript as a message
+        handleSendMessage(transcript.trim());
+      }
+    } catch (error) {
+      console.error('Failed to stop voice recording:', error);
+    }
+  };
+
+  const handleVoiceToggle = () => {
+    if (voiceRecording.isRecording) {
+      handleVoiceStop();
+    } else {
+      handleVoiceStart();
+    }
+  };
+
+  // Request microphone permission on component mount
+  useEffect(() => {
+    if (isVoiceSupportedBrowser && !voiceRecording.hasPermission) {
+      voiceRecording.requestPermission();
+    }
+  }, [isVoiceSupportedBrowser, voiceRecording]);
 
 
   return (
@@ -163,20 +231,86 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
       <div className="chat-input-row">
         <input
           className="chat-input"
-          placeholder="Ask me anything about coding..."
+          placeholder={voiceRecording.isRecording ? "🎤 Listening..." : "Ask me anything about coding..."}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyPress={handleKeyPress}
-          disabled={isLoading}
+          disabled={isLoading || voiceRecording.isRecording}
         />
+        
+        {/* Voice controls */}
+        {isVoiceSupportedBrowser && (
+          <button
+            className={`voice-button ${voiceRecording.isRecording ? 'recording' : ''}`}
+            onClick={handleVoiceToggle}
+            disabled={isLoading || voiceRecording.isProcessing}
+            title={voiceRecording.isRecording ? "Stop recording" : "Start voice input"}
+          >
+            {voiceRecording.isProcessing ? (
+              '🔄'
+            ) : voiceRecording.isRecording ? (
+              '🔴'
+            ) : (
+              '🎤'
+            )}
+          </button>
+        )}
+        
+        {/* TTS controls for last bot message */}
+        {messages.length > 1 && (
+          <button
+            className={`tts-button ${textToSpeech.isPlaying ? 'playing' : ''}`}
+            onClick={async () => {
+              const lastBotMessage = messages.filter(m => m.sender === 'bot').slice(-1)[0];
+              if (lastBotMessage && !textToSpeech.isPlaying) {
+                // Use browser TTS first since it's more reliable
+                try {
+                  await textToSpeech.speakWithBrowser(lastBotMessage.text);
+                } catch (browserError) {
+                  console.warn('Browser TTS failed, trying Sarvam TTS:', browserError);
+                  try {
+                    await textToSpeech.speak(lastBotMessage.text);
+                  } catch (sarvamError) {
+                    console.warn('Both TTS methods failed:', sarvamError);
+                  }
+                }
+              } else {
+                textToSpeech.stop();
+              }
+            }}
+            disabled={textToSpeech.isLoading}
+            title={textToSpeech.isPlaying ? "Stop playback" : "Repeat last response"}
+          >
+            {textToSpeech.isLoading ? '🔄' : textToSpeech.isPlaying ? '🔇' : '🔊'}
+          </button>
+        )}
+        
         <button
           className="chat-send"
-          onClick={handleSendMessage}
-          disabled={!inputText.trim() || isLoading}
+          onClick={() => handleSendMessage()}
+          disabled={!inputText.trim() || isLoading || voiceRecording.isRecording}
         >
           {isLoading ? '...' : 'Send'}
         </button>
       </div>
+      
+      {/* Voice error display */}
+      {(voiceRecording.error || textToSpeech.error) && (
+        <div className="voice-error">
+          {voiceRecording.error && (
+            <div className="error-message">
+              🎤 {voiceRecording.error}
+              <button onClick={voiceRecording.clearError}>×</button>
+            </div>
+          )}
+          {textToSpeech.error && (
+            <div className="error-message">
+              🔊 {textToSpeech.error}
+              <button onClick={textToSpeech.clearError}>×</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
