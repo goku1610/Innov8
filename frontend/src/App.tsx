@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
+import { sendFullSnapshot, sendPatchSnapshot } from './api';
 import './App.css';
 
 interface ExecutionResult {
@@ -214,6 +215,11 @@ function App() {
   const replayTimeoutRef = useRef<number | null>(null);
   const currentReplayIndexRef = useRef<number>(0);
   const replaySortedRef = useRef<any[]>([]);
+
+  // Refs to keep latest values for 30s snapshot loop without resetting interval
+  const selectedLanguageRef = useRef<string>(selectedLanguage);
+  const syntaxErrorsRef = useRef<SyntaxError[]>(syntaxErrors);
+  const hasSyntaxErrorsRef = useRef<boolean>(hasSyntaxErrors);
 
   // ADD THESE TWO NEW REFS
   const lineUpdateBufferRef = useRef<Record<number, { timestamp: number, content: string }>>({});
@@ -1486,6 +1492,72 @@ function App() {
   const clearOutput = () => {
     setResult(null);
   };
+
+  // Keep refs in sync with latest state for snapshot metrics
+  useEffect(() => { selectedLanguageRef.current = selectedLanguage; }, [selectedLanguage]);
+  useEffect(() => { syntaxErrorsRef.current = syntaxErrors; }, [syntaxErrors]);
+  useEffect(() => { hasSyntaxErrorsRef.current = hasSyntaxErrors; }, [hasSyntaxErrors]);
+
+  // Text differ for patches (simple diff-match-patch compatible generation)
+  const makePatch = useCallback((oldText: string, newText: string): string => {
+    // Minimal inline JS diff-match-patch is not bundled; create a lightweight patch format
+    // For now, fallback to sending full when changes are too large; otherwise send unified diff-like
+    try {
+      if (oldText === newText) return '';
+      // Simple heuristic: if delta > 20% of newText, skip patching (send full)
+      const delta = Math.abs(newText.length - oldText.length);
+      const threshold = Math.floor(newText.length * 0.2);
+      if (delta > threshold) return '';
+      // Very naive patch: include both texts; backend still handles real patches, so prefer full
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }, []);
+
+  // Every 30s, send code snapshot; start immediately on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const sendSnapshot = async () => {
+      if (isReplayingRef.current) return;
+      const editor = editorRef.current;
+      const model = editor?.getModel?.();
+      const currentCode = (model?.getValue?.() ?? lastCodeRef.current ?? (code ?? '')).toString();
+      if (!currentCode.trim()) return;
+      try {
+        let respText = '';
+        if (!lastCodeRef.current) {
+          respText = await sendFullSnapshot(currentCode, sessionIdRef.current);
+        } else {
+          const patch = makePatch(lastCodeRef.current, currentCode);
+          if (patch) {
+            respText = await sendPatchSnapshot(patch, sessionIdRef.current);
+          } else {
+            respText = await sendFullSnapshot(currentCode, sessionIdRef.current);
+          }
+        }
+        if (!cancelled) {
+          // eslint-disable-next-line no-console
+          console.log('[AI 30s]', respText);
+        }
+        lastCodeRef.current = currentCode;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('AI snapshot failed', err);
+      }
+    };
+
+    // Fire immediately once on mount
+    void sendSnapshot();
+    const interval = window.setInterval(sendSnapshot, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  // Intentionally empty deps: we use refs to read latest values
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Custom syntax checking when code changes
   useEffect(() => {
