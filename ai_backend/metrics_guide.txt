@@ -1,0 +1,164 @@
+# User Behavior Metrics Guide
+# Understanding Code Development Patterns and User Struggle Indicators
+
+## Overview
+This guide explains the metrics captured during code development sessions and how to interpret them to identify user struggle, learning patterns, and development efficiency.
+
+## Core Metrics Explained
+
+### 1. Timestamp (ts)
+- **What it is**: Unix timestamp in milliseconds when a line was modified
+- **How to read**: Shows the chronological order of changes
+- **Struggle indicator**: Large gaps between timestamps may indicate confusion or research time
+
+### 2. Active Time (activeMs)
+- **What it is**: Time spent actively typing/editing a line in milliseconds
+- **How to read**: Higher values = more time spent on a single line
+- **Struggle indicator**: 
+  - High activeMs (>5000ms) = user struggling with complex logic
+  - Very high activeMs (>10000ms) = significant difficulty or debugging
+  - Low activeMs (<500ms) = confident, quick typing
+
+### 3. Idle Time (idleMs)
+- **What it is**: Time spent not typing on a line (thinking, reading, researching)
+- **How to read**: Higher values = more thinking time
+- **Struggle indicator**:
+  - High idleMs = user is thinking through problems
+  - Very high idleMs = user may be stuck or researching solutions
+  - Low idleMs = confident flow
+
+### 4. Delay Time (delayMs)
+- **What it is**: Time between finishing one line and starting the next
+- **How to read**: Higher values = longer pauses between lines
+- **Struggle indicator**:
+  - High delayMs = user planning next steps or debugging
+  - Very high delayMs (>5000ms) = significant confusion or research
+  - Low delayMs = smooth development flow
+
+### 5. Delay Outlier (delayOutlier)
+- **What it is**: Boolean flag indicating if delayMs is unusually high
+- **How to read**: True = significant pause, False = normal flow
+- **Struggle indicator**: True values indicate moments of confusion or difficulty
+
+### 6. Churn Ratio (churnRatio)
+- **What it is**: Ratio of total keystrokes to final line length (keystrokes/characters)
+- **How to read**: 
+  - 1.0 = perfect typing (no corrections)
+  - 1.1-1.3 = minor corrections
+  - 1.4-1.8 = moderate corrections
+  - >2.0 = significant backspacing/rewriting
+- **Struggle indicator**: Higher ratios indicate uncertainty and frequent corrections
+
+### 7. Churn Added (churnAdded)
+- **What it is**: Total number of characters typed (including corrections)
+- **How to read**: Higher values = more typing activity
+- **Struggle indicator**: High churnAdded with low final content = lots of trial and error
+
+### 8. Churn Deleted (churnDeleted)
+- **What it is**: Total number of characters deleted/backspaced
+- **How to read**: Higher values = more corrections made
+- **Struggle indicator**: High churnDeleted = user unsure of approach, frequent corrections
+
+### 9. Undo Count (undoCount)
+- **What it is**: Number of undo operations performed
+- **How to read**: Higher values = more experimentation
+- **Struggle indicator**: High undoCount = user trying different approaches
+
+## Progressive Seconds
+- **What it is**: Session duration in seconds, incremented by 30-second intervals
+- **How to read**: Shows how long the user has been working
+- **Struggle indicator**: Longer sessions may indicate difficulty completing tasks
+
+## How to Identify User Struggle
+
+### High Struggle Indicators:
+1. **Churn Ratio > 2.0**: User is making many corrections
+2. **High activeMs (>5000ms)**: Spending too much time on single lines
+3. **High delayMs (>3000ms)**: Long pauses between actions
+4. **delayOutlier = True**: Significant pauses indicating confusion
+5. **High churnDeleted**: Lots of backspacing and corrections
+6. **High undoCount**: Frequent experimentation and backtracking
+
+### Low Struggle Indicators (Good Flow):
+1. **Churn Ratio 1.0-1.2**: Smooth typing with minimal corrections
+2. **Low activeMs (<1000ms)**: Quick, confident typing
+3. **Low delayMs (<1000ms)**: Smooth transitions between lines
+4. **Low churnDeleted**: Few corrections needed
+5. **Low undoCount**: Confident approach
+
+## Example Analysis
+
+### Example 1: Struggling User
+```
+- L6: [ts=68160] '' {activeMs=15100, idleMs=0, delayMs=1, delayOutlier=False, churnRatio=1.853, churnAdded=204, churnDeleted=61, undoCount=0}
+```
+**Analysis**: 
+- Very high activeMs (15100ms = 15 seconds on one line)
+- High churnRatio (1.853) indicates many corrections
+- High churnDeleted (61) shows lots of backspacing
+- **Conclusion**: User struggling with this line
+
+### Example 2: Confident User
+```
+- L1: [ts=0] 'print("Hello, World!")'
+```
+**Analysis**:
+- No metrics shown = clean, first-try typing
+- **Conclusion**: User knew exactly what to type
+
+### Example 3: Moderate Struggle
+```
+- L4: [ts=16784] '' {activeMs=11516, idleMs=0, delayMs=1371, delayOutlier=False, churnRatio=1.040, churnAdded=50, churnDeleted=1, undoCount=0}
+```
+**Analysis**:
+- High activeMs (11516ms) but reasonable churnRatio (1.040)
+- Low churnDeleted (1) shows minimal corrections
+- **Conclusion**: User took time to think but was mostly confident
+
+## Using Metrics for AI Assistance
+
+### When to Provide Help:
+1. **Churn Ratio > 1.5** + **High activeMs**: User struggling with implementation
+2. **Multiple delayOutlier=True**: User hitting multiple roadblocks
+3. **High churnDeleted**: User unsure of approach, suggest alternatives
+4. **Progressive Seconds > 300** (5 minutes): User may need guidance
+
+### When User is Flowing Well:
+1. **Churn Ratio < 1.2**: Minimal intervention needed
+2. **Low activeMs**: User is confident, avoid interrupting
+3. **Smooth delayMs**: User has good momentum
+
+## Recommendations for AI Responses
+
+### For High Struggle:
+- Provide step-by-step guidance
+- Suggest simpler approaches
+- Explain concepts clearly
+- Offer debugging help
+
+### For Moderate Struggle:
+- Give hints rather than full solutions
+- Ask clarifying questions
+- Suggest best practices
+
+### For Low Struggle:
+- Minimal intervention
+- Focus on optimization suggestions
+- Advanced tips and techniques
+
+## Session-Level Analysis
+
+### Early Session (progressiveSeconds < 60):
+- Focus on understanding the problem
+- Provide foundational guidance
+
+### Mid Session (progressiveSeconds 60-300):
+- Help with implementation details
+- Debug specific issues
+
+### Long Session (progressiveSeconds > 300):
+- Suggest breaks
+- Offer alternative approaches
+- Help with optimization
+
+This metrics system provides a comprehensive view of user behavior and can help AI assistants provide more targeted and helpful responses based on the user's current struggle level and development patterns.
