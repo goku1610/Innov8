@@ -213,6 +213,10 @@ function App() {
   const currentReplayIndexRef = useRef<number>(0);
   const replaySortedRef = useRef<any[]>([]);
 
+  // ADD THESE TWO NEW REFS
+  const lineUpdateBufferRef = useRef<Record<number, { timestamp: number, content: string }>>({});
+  const lineUpdateFlushTimerRef = useRef<number | null>(null);
+
   // Force-flush any queued events to the backend immediately
   const flushPendingEvents = useCallback(async () => {
     try {
@@ -231,6 +235,40 @@ function App() {
         }
       });
     } catch (_) {}
+  }, []);
+
+  // ADD THIS NEW FUNCTION
+  const flushLineUpdates = useCallback(async () => {
+    try {
+      const buffer = lineUpdateBufferRef.current;
+      const currentSessionId = sessionIdRef.current;
+
+      if (!buffer || Object.keys(buffer).length === 0 || !currentSessionId) {
+          return;
+      }
+
+      // Format the buffer into an array of events
+      const lineEvents = Object.entries(buffer).map(([lineNumber, data]) => ({
+          type: 'LINE_UPDATE',
+          timestamp: data.timestamp,
+          payload: {
+              lineNumber: parseInt(lineNumber, 10),
+              content: data.content
+          }
+      }));
+
+      // Clear the buffer immediately
+      lineUpdateBufferRef.current = {};
+
+      // Send to your /session/event endpoint
+      await axios.post('http://localhost:3000/session/event', {
+          sessionId: currentSessionId,
+          events: lineEvents
+      });
+    } catch (error) {
+        console.error('Failed to flush line updates:', error);
+        // Optional: Add logic to re-queue failed events
+    }
   }, []);
 
   // Semantic event detection functions
@@ -983,14 +1021,15 @@ function App() {
         // Debounce the marker updates
         setTimeout(updateMarkers, 500);
         
-        // Record keystroke event for session (event sourcing)
         const now = Date.now();
         const base = sessionStartTimeRef.current || now;
-        const currentCode = model.getValue();
-        
-        // Keystroke-level event (for Monaco replay)
+        const relativeTimestamp = now - base;
+
+        // --- START OF MODIFICATIONS ---
+
+        // 1. Capture the raw keystroke event (as you already do)
         const keystrokeEvent = {
-          timestamp: now - base,
+          timestamp: relativeTimestamp,
           type: 'EDIT',
           payload: {
             changes: (e?.changes || []).map((c: any) => ({
@@ -1007,25 +1046,64 @@ function App() {
           }
         };
         pendingEventsRef.current.push(keystrokeEvent);
+
+        // 2. Capture the full content of every changed line for versioning
+        for (const change of e.changes) {
+            // A single change can affect multiple lines (e.g., pasting a block of code)
+            for (let i = change.range.startLineNumber; i <= change.range.endLineNumber; i++) {
+                try {
+                    // Ensure line number is valid and get content safely
+                    if (i > 0 && i <= model.getLineCount()) {
+                        const newContent = model.getLineContent(i); // Get the new content
+                        const lastKnownContent = lineUpdateBufferRef.current[i]?.content; // Get the last version from our buffer
+
+                        // --- THIS IS THE FIX ---
+                        // ONLY add to the buffer if the line's text has actually changed.
+                        if (newContent !== lastKnownContent) {
+                            lineUpdateBufferRef.current[i] = {
+                                timestamp: relativeTimestamp,
+                                content: newContent 
+                            };
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Failed to get line content for line', i, error);
+                }
+            }
+        }
+
+        // 3. Debounce sending the buffered line updates to the server
+        if (lineUpdateFlushTimerRef.current !== null) {
+          clearTimeout(lineUpdateFlushTimerRef.current);
+        }
+        lineUpdateFlushTimerRef.current = window.setTimeout(() => {
+            try {
+                flushLineUpdates();
+            } catch (error) {
+                console.error('Error in flushLineUpdates timeout:', error);
+            }
+        }, 750); // Send line updates after 750ms of inactivity
+
+        // --- END OF MODIFICATIONS ---
+
+        // The rest of your existing logic for flushing raw events can remain
         lastInputTimeRef.current = now;
-        // Idle-based flush: if no further input within 200ms, flush
         if (idleFlushTimerRef.current !== null) {
           clearTimeout(idleFlushTimerRef.current);
         }
         idleFlushTimerRef.current = window.setTimeout(() => {
-          // Only flush if still idle and same session exists
           const idleFor = Date.now() - lastInputTimeRef.current;
           if (idleFor >= 200) {
-            flushPendingEvents();
+            flushPendingEvents(); // This flushes the raw 'EDIT' events
           }
         }, 220);
 
-        // Size-based flush: if queue grows large, flush immediately
         if (pendingEventsRef.current.length >= 25) {
           flushPendingEvents();
         }
         
         // Detect semantic events
+        const currentCode = model.getValue();
         detectWordComplete(currentCode, now);
         detectLineComplete(currentCode, now);
         

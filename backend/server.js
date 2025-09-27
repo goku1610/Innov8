@@ -44,6 +44,12 @@ const sessionEventSchema = new mongoose.Schema({
   payload: { type: mongoose.Schema.Types.Mixed, required: true }
 }, { _id: false });
 
+// ADD THIS NEW SUB-SCHEMA
+const lineVersionSchema = new mongoose.Schema({
+  timestamp: { type: Number, required: true },
+  content: { type: String, required: true }
+}, { _id: false });
+
 const sessionSchema = new mongoose.Schema({
   sessionId: { type: String, index: true },
   userId: { type: String },
@@ -52,6 +58,12 @@ const sessionSchema = new mongoose.Schema({
   startTime: { type: Number, required: true },
   endTime: { type: Number },
   events: { type: [sessionEventSchema], default: [] },
+  // ADD THIS NEW FIELD
+  lineHistory: {
+    type: Map,
+    of: [lineVersionSchema],
+    default: {}
+  },
   meta: { type: mongoose.Schema.Types.Mixed }
 }, { timestamps: true });
 
@@ -67,9 +79,31 @@ app.post("/session/start", async (req, res) => {
     const sessionId = uuid();
     const startTime = Date.now();
     
+    // --- START OF NEW LOGIC ---
+    // Create the initial history for every line in the code.
+    const initialLineHistory = {};
+    const lines = initialCode.split('\n');
+    lines.forEach((lineContent, index) => {
+        const lineNumber = index + 1; // Line numbers are 1-based
+        initialLineHistory[lineNumber] = [{
+            timestamp: 0, // Timestamp 0 represents the initial state at startTime
+            content: lineContent
+        }];
+    });
+    // --- END OF NEW LOGIC ---
+
     if (mongoConnected) {
       try {
-        await SessionModel.create({ sessionId, userId: userId || null, language, initialCode, startTime, meta: meta || {} });
+        // Pass the new initialLineHistory when creating the session document.
+        await SessionModel.create({ 
+          sessionId, 
+          userId: userId || null, 
+          language, 
+          initialCode, 
+          startTime, 
+          meta: meta || {},
+          lineHistory: initialLineHistory // Add the pre-populated history here
+        });
         console.log(`Session started: ${sessionId}`);
       } catch (mongoErr) {
         console.error("MongoDB save error:", mongoErr.message);
@@ -95,14 +129,41 @@ app.post("/session/event", async (req, res) => {
     
     if (mongoConnected) {
       try {
-        await SessionModel.updateOne(
-          { sessionId },
-          { $push: { events: { $each: events } } }
-        );
-        console.log(`Events added to session: ${sessionId} (${events.length} events)`);
+        // Separate events into raw deltas and our new line updates
+        const rawEvents = events.filter(e => e.type !== 'LINE_UPDATE');
+        const lineUpdates = events.filter(e => e.type === 'LINE_UPDATE');
+
+        const updateOps = {};
+
+        // Prepare push operation for original raw events (like 'EDIT')
+        if (rawEvents.length > 0) {
+          updateOps.$push = { events: { $each: rawEvents } };
+        }
+
+        // Prepare push operations for each line version update
+        for (const update of lineUpdates) {
+          const { lineNumber, content } = update.payload;
+          const timestamp = update.timestamp;
+          
+          // Using dot notation to push into the array within the map field
+          const field = `lineHistory.${lineNumber}`;
+          if (!updateOps.$push) updateOps.$push = {};
+          
+          // Ensure the array exists for this line number before pushing
+          if (!updateOps.$push[field]) {
+            updateOps.$push[field] = { $each: [] };
+          }
+          updateOps.$push[field].$each.push({ timestamp, content });
+        }
+        
+        // Only run the update if there's something to do
+        if (Object.keys(updateOps).length > 0) {
+            await SessionModel.updateOne({ sessionId }, updateOps);
+            console.log(`Events processed for session: ${sessionId} (${events.length} total)`);
+        }
+
       } catch (mongoErr) {
         console.error("MongoDB update error:", mongoErr.message);
-        // Continue without failing the request
       }
     } else {
       console.log("MongoDB not connected, events not saved:", sessionId);
