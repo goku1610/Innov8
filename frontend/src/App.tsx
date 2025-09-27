@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import './App.css';
@@ -282,8 +282,98 @@ function App() {
     setReplaySpeed(speed);
   };
 
+  // --- Three-pane resizable layout state ---
+  const [leftWidthPct, setLeftWidthPct] = useState<number>(25); // 15-40
+  const [rightWidthPct, setRightWidthPct] = useState<number>(25); // 15-40
+  const [middleSplitPct, setMiddleSplitPct] = useState<number>(60); // editor height % in middle, 30-80
+
+  const isDraggingLeftRef = useRef<boolean>(false);
+  const isDraggingRightRef = useRef<boolean>(false);
+  const isDraggingMidSplitRef = useRef<boolean>(false);
+
+  const dragStartXRef = useRef<number>(0);
+  const dragStartYRef = useRef<number>(0);
+  const dragStartLeftPctRef = useRef<number>(leftWidthPct);
+  const dragStartRightPctRef = useRef<number>(rightWidthPct);
+  const dragStartMidSplitPctRef = useRef<number>(middleSplitPct);
+
+  // Attach global mouse listeners for resizing
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      // Calculate container width/height relative to viewport
+      const container = document.getElementById('three-pane-container');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+
+      if (isDraggingLeftRef.current) {
+        const deltaPx = e.clientX - dragStartXRef.current;
+        const deltaPct = (deltaPx / rect.width) * 100;
+        let newLeft = Math.max(15, Math.min(40, dragStartLeftPctRef.current + deltaPct));
+        // Ensure middle retains at least 20% total
+        const middleAvailable = 100 - newLeft - rightWidthPct;
+        if (middleAvailable < 20) {
+          newLeft = 100 - rightWidthPct - 20;
+        }
+        setLeftWidthPct(newLeft);
+      }
+
+      if (isDraggingRightRef.current) {
+        const deltaPx = dragStartXRef.current - e.clientX; // dragging left increases right pane
+        const deltaPct = (deltaPx / rect.width) * 100;
+        let newRight = Math.max(15, Math.min(40, dragStartRightPctRef.current + deltaPct));
+        // Ensure middle retains at least 20% total
+        const middleAvailable = 100 - leftWidthPct - newRight;
+        if (middleAvailable < 20) {
+          newRight = 100 - leftWidthPct - 20;
+        }
+        setRightWidthPct(newRight);
+      }
+
+      if (isDraggingMidSplitRef.current) {
+        const middle = document.getElementById('middle-pane');
+        if (!middle) return;
+        const mrect = middle.getBoundingClientRect();
+        const deltaPx = e.clientY - dragStartYRef.current;
+        const deltaPct = (deltaPx / mrect.height) * 100;
+        let newPct = Math.max(30, Math.min(80, dragStartMidSplitPctRef.current + deltaPct));
+        setMiddleSplitPct(newPct);
+      }
+    };
+
+    const onMouseUp = () => {
+      isDraggingLeftRef.current = false;
+      isDraggingRightRef.current = false;
+      isDraggingMidSplitRef.current = false;
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [leftWidthPct, rightWidthPct]);
+
+  const beginDragLeft = (e: React.MouseEvent) => {
+    dragStartXRef.current = e.clientX;
+    dragStartLeftPctRef.current = leftWidthPct;
+    isDraggingLeftRef.current = true;
+  };
+
+  const beginDragRight = (e: React.MouseEvent) => {
+    dragStartXRef.current = e.clientX;
+    dragStartRightPctRef.current = rightWidthPct;
+    isDraggingRightRef.current = true;
+  };
+
+  const beginDragMiddleSplit = (e: React.MouseEvent) => {
+    dragStartYRef.current = e.clientY;
+    dragStartMidSplitPctRef.current = middleSplitPct;
+    isDraggingMidSplitRef.current = true;
+  };
+
   // Centralized syntax check that applies Monaco markers and updates sidebar state
-  const performSyntaxCheck = async () => {
+  const performSyntaxCheck = useCallback(async () => {
     const current = editorRef.current;
     if (!current) return;
     const monacoModel = current.getModel?.();
@@ -374,7 +464,7 @@ function App() {
     } catch (_) {
       // Do not clear markers on failures; persist until a successful, clean check
     }
-  };
+  }, [code, selectedLanguage]);
 
   const handleLanguageChange = (newLanguage: string) => {
     setSelectedLanguage(newLanguage);
@@ -629,7 +719,7 @@ function App() {
 
     run();
     return () => { cancelled = true; };
-  }, [code, selectedLanguage]);
+  }, [performSyntaxCheck]);
 
   // When an error is present, keep re-checking every 350ms until resolved
   useEffect(() => {
@@ -658,7 +748,15 @@ function App() {
         pollTimeoutRef.current = null;
       }
     }
-  }, [hasSyntaxErrors]);
+  }, [hasSyntaxErrors, performSyntaxCheck]);
+
+  // Silence unused warning for detectCodeRun (reserved for future event type)
+  useEffect(() => {
+    if (false) {
+      detectCodeRun('', 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runCode = async () => {
     if (!code.trim()) {
@@ -854,56 +952,11 @@ function App() {
                   language: 'python',
                   initialCode: '',
                   events: [
-                    {
-                      timestamp: 0,
-                      type: 'EDIT',
-                      payload: {
-                        changes: [{
-                          range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
-                          text: 'p'
-                        }]
-                      }
-                    },
-                    {
-                      timestamp: 100,
-                      type: 'EDIT',
-                      payload: {
-                        changes: [{
-                          range: { startLineNumber: 1, startColumn: 2, endLineNumber: 1, endColumn: 2 },
-                          text: 'r'
-                        }]
-                      }
-                    },
-                    {
-                      timestamp: 200,
-                      type: 'EDIT',
-                      payload: {
-                        changes: [{
-                          range: { startLineNumber: 1, startColumn: 3, endLineNumber: 1, endColumn: 3 },
-                          text: 'i'
-                        }]
-                      }
-                    },
-                    {
-                      timestamp: 300,
-                      type: 'EDIT',
-                      payload: {
-                        changes: [{
-                          range: { startLineNumber: 1, startColumn: 4, endLineNumber: 1, endColumn: 4 },
-                          text: 'n'
-                        }]
-                      }
-                    },
-                    {
-                      timestamp: 400,
-                      type: 'EDIT',
-                      payload: {
-                        changes: [{
-                          range: { startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 5 },
-                          text: 't'
-                        }]
-                      }
-                    }
+                    { timestamp: 0, type: 'EDIT', payload: { changes: [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, text: 'p' }] } },
+                    { timestamp: 100, type: 'EDIT', payload: { changes: [{ range: { startLineNumber: 1, startColumn: 2, endLineNumber: 1, endColumn: 2 }, text: 'r' }] } },
+                    { timestamp: 200, type: 'EDIT', payload: { changes: [{ range: { startLineNumber: 1, startColumn: 3, endLineNumber: 1, endColumn: 3 }, text: 'i' }] } },
+                    { timestamp: 300, type: 'EDIT', payload: { changes: [{ range: { startLineNumber: 1, startColumn: 4, endLineNumber: 1, endColumn: 4 }, text: 'n' }] } },
+                    { timestamp: 400, type: 'EDIT', payload: { changes: [{ range: { startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 5 }, text: 't' }] } }
                   ]
                 };
                 
@@ -926,199 +979,233 @@ function App() {
         </div>
       </header>
 
-      <div className="main-container">
-        <div className="editor-section">
-          <div className="editor-header">
-            <div className="editor-title">
-              <h3>Code Editor</h3>
-              {isReplaying && replaySession && (
-                <div className="replay-info">
-                  <span className="replay-indicator">🔴 REPLAYING</span>
-                  <span className="session-info">
-                    Session: {replaySession.sessionId?.substring(0, 8)}... | 
-                    Language: {replaySession.language} | 
-                    Events: {replayEvents.length}
-                  </span>
-                  {currentReplayEvent && (
-                    <div className="current-event">
-                      <span className="event-type">{currentReplayEvent.type}</span>
-                      <span className="event-time">+{currentReplayEvent.timestamp}ms</span>
-                      {currentReplayEvent.type === 'EDIT' && currentReplayEvent.payload.changes[0] && (
-                        <span className="event-text">
-                          "{currentReplayEvent.payload.changes[0].text}"
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="button-group">
-              {!isReplaying ? (
-                <button 
-                  className={`run-button ${hasSyntaxErrors ? 'has-errors' : ''}`}
-                  onClick={runCode} 
-                  disabled={isRunning}
-                >
-                  {isRunning ? 'Running...' : 'Run Code'}
-                </button>
-              ) : (
-                <div className="replay-controls">
-                  <button 
-                    className="replay-button"
-                    onClick={isReplaying ? pauseReplay : resumeReplay}
-                  >
-                    {isReplaying ? 'Pause' : 'Resume'}
-                  </button>
-                  <button 
-                    className="replay-button"
-                    onClick={stopReplay}
-                  >
-                    Stop
-                  </button>
-                  <div className="replay-speed">
-                    <label>Speed:</label>
-                    <select 
-                      value={replaySpeed} 
-                      onChange={(e) => changeReplaySpeed(parseFloat(e.target.value))}
-                    >
-                      <option value={0.5}>0.5x</option>
-                      <option value={1}>1x</option>
-                      <option value={2}>2x</option>
-                      <option value={4}>4x</option>
-                    </select>
-                  </div>
-                  <div className="replay-progress">
-                    <div className="progress-bar">
-                      <div 
-                        className="progress-fill" 
-                        style={{ width: `${replayProgress}%` }}
-                      ></div>
-                    </div>
-                    <span>{Math.round(replayProgress)}%</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div className="editor-container">
-            <Editor
-              height="400px"
-              language={LANGUAGES.find(lang => lang.value === selectedLanguage)?.monacoLang}
-              value={code}
-              onChange={(value) => setCode(value || '')}
-              onMount={handleEditorDidMount}
-              theme="vs-dark"
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                lineNumbers: 'on',
-                roundedSelection: false,
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                // Disable all autocomplete and suggestions
-                quickSuggestions: false,
-                suggestOnTriggerCharacters: false,
-                acceptSuggestionOnEnter: 'off',
-                tabCompletion: 'off',
-                wordBasedSuggestions: 'off',
-                // Error highlighting
-                renderValidationDecorations: 'on',
-                // Code folding
-                folding: true,
-                foldingStrategy: 'indentation',
-                // Bracket matching
-                matchBrackets: 'always',
-                // Auto closing brackets
-                autoClosingBrackets: 'languageDefined',
-                autoClosingQuotes: 'languageDefined',
-                // Indentation
-                insertSpaces: true,
-                tabSize: 4,
-                // Error squiggles
-                renderWhitespace: 'boundary',
-                // Disable IntelliSense completely
-                suggest: {
-                  showKeywords: false,
-                  showSnippets: false,
-                  showFunctions: false,
-                  showConstructors: false,
-                  showFields: false,
-                  showVariables: false,
-                  showClasses: false,
-                  showStructs: false,
-                  showInterfaces: false,
-                  showModules: false,
-                  showProperties: false,
-                  showEvents: false,
-                  showOperators: false,
-                  showUnits: false,
-                  showValues: false,
-                  showConstants: false,
-                  showEnums: false,
-                  showEnumMembers: false,
-                  showColors: false,
-                  showFiles: false,
-                  showReferences: false,
-                  showFolders: false,
-                  showTypeParameters: false,
-                  showIssues: false,
-                  showUsers: false,
-                  showWords: false
-                }
-              }}
-            />
+      {/* Three-pane resizable layout */}
+      <div id="three-pane-container" className="three-pane-container">
+        {/* Left: Question panel */}
+        <div className="pane pane-left" style={{ width: `${leftWidthPct}%` }}>
+          <div className="pane-header">Question</div>
+          <div className="pane-content question-content">
+            <h3>Two Sum</h3>
+            <p>
+              Given an array of integers nums and an integer target, return indices of the two numbers 
+              such that they add up to target.
+            </p>
+            <p>
+              You may assume that each input would have exactly one solution, and you may not use the same element twice.
+            </p>
+            <p>Example: nums = [2,7,11,15], target = 9 → [0,1]</p>
           </div>
         </div>
+        <div className="gutter-vertical" onMouseDown={beginDragLeft} />
 
-        <div className="output-section">
-          <div className="output-header">
-            <h3>Output</h3>
-            <button className="clear-button" onClick={clearOutput}>
-              Clear
-            </button>
+        {/* Middle: Editor (top) + Output (bottom) with horizontal resizer */}
+        <div id="middle-pane" className="pane pane-middle" style={{ width: `${100 - leftWidthPct - rightWidthPct}%` }}>
+          <div className="middle-top" style={{ height: `${middleSplitPct}%` }}>
+            <div className="editor-header">
+              <div className="editor-title">
+                <h3>Code Editor</h3>
+                {isReplaying && replaySession && (
+                  <div className="replay-info">
+                    <span className="replay-indicator">🔴 REPLAYING</span>
+                    <span className="session-info">
+                      Session: {replaySession.sessionId?.substring(0, 8)}... | 
+                      Language: {replaySession.language} | 
+                      Events: {replayEvents.length}
+                    </span>
+                    {currentReplayEvent && (
+                      <div className="current-event">
+                        <span className="event-type">{currentReplayEvent.type}</span>
+                        <span className="event-time">+{currentReplayEvent.timestamp}ms</span>
+                        {currentReplayEvent.type === 'EDIT' && currentReplayEvent.payload.changes[0] && (
+                          <span className="event-text">
+                            "{currentReplayEvent.payload.changes[0].text}"
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="button-group">
+                {!isReplaying ? (
+                  <button 
+                    className={`run-button ${hasSyntaxErrors ? 'has-errors' : ''}`}
+                    onClick={runCode} 
+                    disabled={isRunning}
+                  >
+                    {isRunning ? 'Running...' : 'Run Code'}
+                  </button>
+                ) : (
+                  <div className="replay-controls">
+                    <button 
+                      className="replay-button"
+                      onClick={isReplaying ? pauseReplay : resumeReplay}
+                    >
+                      {isReplaying ? 'Pause' : 'Resume'}
+                    </button>
+                    <button 
+                      className="replay-button"
+                      onClick={stopReplay}
+                    >
+                      Stop
+                    </button>
+                    <div className="replay-speed">
+                      <label>Speed:</label>
+                      <select 
+                        value={replaySpeed} 
+                        onChange={(e) => changeReplaySpeed(parseFloat(e.target.value))}
+                      >
+                        <option value={0.5}>0.5x</option>
+                        <option value={1}>1x</option>
+                        <option value={2}>2x</option>
+                        <option value={4}>4x</option>
+                      </select>
+                    </div>
+                    <div className="replay-progress">
+                      <div className="progress-bar">
+                        <div 
+                          className="progress-fill" 
+                          style={{ width: `${replayProgress}%` }}
+                        ></div>
+                      </div>
+                      <span>{Math.round(replayProgress)}%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="editor-container">
+              <Editor
+                height="100%"
+                language={LANGUAGES.find(lang => lang.value === selectedLanguage)?.monacoLang}
+                value={code}
+                onChange={(value) => setCode(value || '')}
+                onMount={handleEditorDidMount}
+                theme="vs-dark"
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  lineNumbers: 'on',
+                  roundedSelection: false,
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  // Disable all autocomplete and suggestions
+                  quickSuggestions: false,
+                  suggestOnTriggerCharacters: false,
+                  acceptSuggestionOnEnter: 'off',
+                  tabCompletion: 'off',
+                  wordBasedSuggestions: 'off',
+                  // Error highlighting
+                  renderValidationDecorations: 'on',
+                  // Code folding
+                  folding: true,
+                  foldingStrategy: 'indentation',
+                  // Bracket matching
+                  matchBrackets: 'always',
+                  // Auto closing brackets
+                  autoClosingBrackets: 'languageDefined',
+                  autoClosingQuotes: 'languageDefined',
+                  // Indentation
+                  insertSpaces: true,
+                  tabSize: 4,
+                  // Error squiggles
+                  renderWhitespace: 'boundary',
+                  // Disable IntelliSense completely
+                  suggest: {
+                    showKeywords: false,
+                    showSnippets: false,
+                    showFunctions: false,
+                    showConstructors: false,
+                    showFields: false,
+                    showVariables: false,
+                    showClasses: false,
+                    showStructs: false,
+                    showInterfaces: false,
+                    showModules: false,
+                    showProperties: false,
+                    showEvents: false,
+                    showOperators: false,
+                    showUnits: false,
+                    showValues: false,
+                    showConstants: false,
+                    showEnums: false,
+                    showEnumMembers: false,
+                    showColors: false,
+                    showFiles: false,
+                    showReferences: false,
+                    showFolders: false,
+                    showTypeParameters: false,
+                    showIssues: false,
+                    showUsers: false,
+                    showWords: false
+                  }
+                }}
+              />
+            </div>
           </div>
-          
-          <div className="output-container">
-            {isRunning ? (
-              <div className="loading">
-                <div className="spinner"></div>
-                <span>Executing code...</span>
-              </div>
-            ) : syntaxErrors.length > 0 ? (
-              <div className="syntax-errors">
-                <div className="error-header">
-                  <strong>Syntax Errors ({syntaxErrors.length})</strong>
+          <div className="gutter-horizontal" onMouseDown={beginDragMiddleSplit} />
+          <div className="middle-bottom" style={{ height: `${100 - middleSplitPct}%` }}>
+            <div className="output-header">
+              <h3>Output</h3>
+              <button className="clear-button" onClick={clearOutput}>
+                Clear
+              </button>
+            </div>
+            <div className="output-container">
+              {isRunning ? (
+                <div className="loading">
+                  <div className="spinner"></div>
+                  <span>Executing code...</span>
                 </div>
-                {syntaxErrors.map((error, index) => (
-                  <div key={index} className={`syntax-error ${error.severity}`}>
-                    <span className="error-location">Line {error.line}, Column {error.column}</span>
-                    <span className="error-message">{error.message}</span>
+              ) : syntaxErrors.length > 0 ? (
+                <div className="syntax-errors">
+                  <div className="error-header">
+                    <strong>Syntax Errors ({syntaxErrors.length})</strong>
                   </div>
-                ))}
-              </div>
-            ) : result ? (
-              <div className="result">
-                {result.output && (
-                  <div className="stdout">
-                    <strong>Output:</strong>
-                    <pre>{result.output}</pre>
-                  </div>
-                )}
-                {result.error && (
-                  <div className="stderr">
-                    <strong>Runtime/Compilation Error:</strong>
-                    <pre>{result.error}</pre>
-                  </div>
-                )}
-                {!result.output && !result.error && (
-                  <div className="no-output">No output</div>
-                )}
-              </div>
-            ) : (
-              <div className="no-output">Click "Run Code" to execute your program</div>
-            )}
+                  {syntaxErrors.map((error, index) => (
+                    <div key={index} className={`syntax-error ${error.severity}`}>
+                      <span className="error-location">Line {error.line}, Column {error.column}</span>
+                      <span className="error-message">{error.message}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : result ? (
+                <div className="result">
+                  {result.output && (
+                    <div className="stdout">
+                      <strong>Output:</strong>
+                      <pre>{result.output}</pre>
+                    </div>
+                  )}
+                  {result.error && (
+                    <div className="stderr">
+                      <strong>Runtime/Compilation Error:</strong>
+                      <pre>{result.error}</pre>
+                    </div>
+                  )}
+                  {!result.output && !result.error && (
+                    <div className="no-output">No output</div>
+                  )}
+                </div>
+              ) : (
+                <div className="no-output">Click "Run Code" to execute your program</div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="gutter-vertical" onMouseDown={beginDragRight} />
+
+        {/* Right: Chatbot panel (sample) */}
+        <div className="pane pane-right" style={{ width: `${rightWidthPct}%` }}>
+          <div className="pane-header">AI Assistant</div>
+          <div className="pane-content chat-content">
+            <div className="chat-message bot">Hello! I'm your coding assistant. Ask me anything about this problem.</div>
+            <div className="chat-message user">What's the time complexity of the optimal solution?</div>
+            <div className="chat-message bot">O(n) using a hash map to store seen values.</div>
+            <div className="chat-input-row">
+              <input className="chat-input" placeholder="Type a message..." />
+              <button className="chat-send">Send</button>
+            </div>
           </div>
         </div>
       </div>
