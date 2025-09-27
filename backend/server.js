@@ -6,6 +6,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
+import axios from "axios";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -573,36 +574,124 @@ app.post("/sessions/cleanup-empty", async (req, res) => {
   }
 });
 
-// AI Chat functionality
-const getAIResponse = (userMessage) => {
-  const message = userMessage.toLowerCase();
+// AI Chat functionality with context tracking
+const chatSessions = new Map(); // Store chat history per session
 
-  // Default responses
-  const responses = [
-    "I can help you with Two Sum and general coding concepts! Ask me about time complexity, approaches, edge cases, or implementation details.",
-    "I'm here to assist with your coding questions. What specific aspect of the Two Sum problem would you like to explore?",
-    "Feel free to ask about algorithms, data structures, or any coding concepts you're working with!"
-  ];
+const getAIResponse = async (userMessage, sessionId = null) => {
+  try {
+    // Get or create session context
+    if (!sessionId) {
+      sessionId = uuid();
+    }
+    
+    let sessionContext = chatSessions.get(sessionId) || {
+      messages: [],
+      sessionId
+    };
 
-  return responses[Math.floor(Math.random() * responses.length)];
+    // Add user message to context
+    sessionContext.messages.push({
+      role: "user",
+      content: userMessage,
+      timestamp: new Date().toISOString()
+    });
+
+    // Build conversation context for AI
+    const contextMessages = sessionContext.messages.slice(-10); // Keep last 10 messages for context
+    const conversationHistory = contextMessages.map(msg => 
+      `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+    ).join('\n');
+
+    // Create full prompt with conversation history
+    const fullPrompt = conversationHistory ? 
+      `Previous conversation:\n${conversationHistory}\n\nCurrent user message: ${userMessage}` : 
+      userMessage;
+
+    // System prompt for chatbot assistant
+    const systemPrompt = `You are a friendly and helpful AI coding assistant chatbot. You're here to help developers with their coding questions and challenges.
+
+    Your personality:
+    - Be conversational, encouraging, and supportive
+    - Use a friendly, approachable tone
+    - Ask clarifying questions when needed
+    - Celebrate successes and provide encouragement
+    - Break down complex concepts into understandable parts
+
+    You can help with:
+    - Coding questions and problem-solving
+    - Algorithm and data structure explanations
+    - Debugging assistance
+    - Code review and optimization suggestions
+    - Learning new programming concepts
+    - Best practices and coding standards
+    - General programming advice
+
+    Remember the conversation history to provide contextual and personalized responses. Be patient with beginners and detailed with explanations.`;
+
+    // Call AI backend
+    const aiResponse = await axios.post('http://localhost:8000/api/llm/generate', {
+      session_id: sessionId,
+      mode: 'full',
+      code: fullPrompt, // Send full conversation context
+      metrics: {
+        conversationLength: sessionContext.messages.length,
+        lastMessageTime: new Date().toISOString()
+      }
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000 // 30 second timeout
+    });
+
+    const aiResponseText = aiResponse.data.response;
+
+    // Add AI response to context
+    sessionContext.messages.push({
+      role: "assistant",
+      content: aiResponseText,
+      timestamp: new Date().toISOString()
+    });
+
+    // Update session context
+    chatSessions.set(sessionId, sessionContext);
+
+    return {
+      response: aiResponseText,
+      sessionId: sessionId
+    };
+
+  } catch (error) {
+    console.error("AI Backend error:", error);
+    
+    // Fallback response if AI backend is unavailable
+    const fallbackResponses = [
+      "I'm having trouble connecting to the AI service right now. Please try again in a moment.",
+      "The AI assistant is temporarily unavailable. Please check back later.",
+      "Sorry, I'm experiencing technical difficulties. Please try again."
+    ];
+    
+    return {
+      response: fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)],
+      sessionId: sessionId
+    };
+  }
 };
 
 // Chat endpoint
 app.post("/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, sessionId } = req.body;
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // Simulate AI processing delay
-    await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200));
-
-    const response = getAIResponse(message);
+    const aiResult = await getAIResponse(message, sessionId);
 
     return res.json({
-      response,
+      response: aiResult.response,
+      sessionId: aiResult.sessionId,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

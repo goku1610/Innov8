@@ -75,6 +75,7 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Voice functionality hooks
@@ -109,6 +110,11 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
       const response = await axios.post('http://localhost:5000/chat', {
         message: textToSend
       });
+
+      // Update session ID if provided by backend
+      if (response.data.sessionId && response.data.sessionId !== sessionId) {
+        setSessionId(response.data.sessionId);
+      }
 
       const botMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
