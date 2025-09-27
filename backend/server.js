@@ -47,6 +47,23 @@ const fileMap = {
   }
 };
 
+function getFixedBasename(language) {
+  switch (language) {
+    case 'python':
+      return 'main.py';
+    case 'javascript':
+      return 'main.js';
+    case 'java':
+      return 'Main.java';
+    case 'c':
+      return 'main.c';
+    case 'cpp':
+      return 'main.cpp';
+    default:
+      return 'main.txt';
+  }
+}
+
 // Build compile-only/syntax-only check command per language
 function getCheckCommand(language, f) {
   const dir = path.dirname(f);
@@ -81,13 +98,12 @@ app.post("/check", async (req, res) => {
     }
 
     const id = uuid();
-    let fileName;
-
-    if (language === 'java') {
-      fileName = path.join(tmpDir, 'Main.java');
-    } else {
-      fileName = path.join(tmpDir, `${language}-${id}${fileMap[language].ext}`);
+    const runDir = path.join(tmpDir, id);
+    if (!fs.existsSync(runDir)) {
+      fs.mkdirSync(runDir, { recursive: true });
     }
+    const fixedBase = getFixedBasename(language);
+    const fileName = path.join(runDir, fixedBase);
 
     try {
       fs.writeFileSync(fileName, code);
@@ -99,10 +115,12 @@ app.post("/check", async (req, res) => {
         maxBuffer: 1024 * 1024
       }, (err, stdout, stderr) => {
         try {
-          if (fs.existsSync(fileName)) {
-            fs.unlinkSync(fileName);
+          if (fs.existsSync(runDir)) {
+            fs.rmSync(runDir, { recursive: true, force: true });
           }
-        } catch (_) {}
+        } catch (cleanupError) {
+          console.error("Error cleaning up file:", cleanupError);
+        }
 
         const ok = !err;
         return res.json({ ok, stdout: stdout || "", stderr: stderr || "" });
@@ -129,14 +147,12 @@ app.post("/run", async (req, res) => {
     }
 
   const id = uuid();
-  let fileName;
-  
-  // Special handling for Java - save as Main.java
-  if (language === 'java') {
-    fileName = path.join(tmpDir, 'Main.java');
-  } else {
-    fileName = path.join(tmpDir, `${language}-${id}${fileMap[language].ext}`);
+  const runDir = path.join(tmpDir, id);
+  if (!fs.existsSync(runDir)) {
+    fs.mkdirSync(runDir, { recursive: true });
   }
+  const fixedBase = getFixedBasename(language);
+  const fileName = path.join(runDir, fixedBase);
   
   try {
     // Write code to temporary file
@@ -151,8 +167,8 @@ app.post("/run", async (req, res) => {
     }, (err, stdout, stderr) => {
       // Clean up the temporary file
       try {
-        if (fs.existsSync(fileName)) {
-          fs.unlinkSync(fileName);
+        if (fs.existsSync(runDir)) {
+          fs.rmSync(runDir, { recursive: true, force: true });
         }
       } catch (cleanupErr) {
         console.error("Error cleaning up file:", cleanupErr);

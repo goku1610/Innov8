@@ -58,6 +58,102 @@ function App() {
   const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
   const [hasSyntaxErrors, setHasSyntaxErrors] = useState(false);
   const editorRef = useRef<any>(null);
+  const pollRef = useRef<boolean>(false);
+  const pollTimeoutRef = useRef<number | null>(null);
+
+  // Centralized syntax check that applies Monaco markers and updates sidebar state
+  const performSyntaxCheck = async () => {
+    const current = editorRef.current;
+    if (!current) return;
+    const monacoModel = current.getModel?.();
+    if (!monacoModel) return;
+    if (!code.trim()) {
+      // Clear markers and state only when the editor is empty
+      // @ts-ignore
+      const monacoAny = (window as any).monaco;
+      if (monacoAny) {
+        monacoAny.editor.setModelMarkers(monacoModel, 'owner', []);
+      }
+      setSyntaxErrors([]);
+      setHasSyntaxErrors(false);
+      return;
+    }
+
+    try {
+      const resp = await axios.post('http://localhost:3000/check', {
+        language: selectedLanguage,
+        code
+      });
+
+      const stderr: string = resp.data?.stderr || '';
+
+      // Parse stderr into Monaco markers (best-effort, per language)
+      const markers: any[] = [];
+      const addMarker = (line: number, column: number, message: string) => {
+        markers.push({
+          startLineNumber: Math.max(1, line),
+          startColumn: Math.max(1, column),
+          endLineNumber: Math.max(1, line),
+          endColumn: Math.max(1, column + 1),
+          message,
+          severity: 8 // monaco.MarkerSeverity.Error
+        });
+      };
+
+      if (stderr) {
+        if (selectedLanguage === 'javascript') {
+          const re = /:(\d+)(?::(\d+))?/g;
+          let m;
+          while ((m = re.exec(stderr)) !== null) {
+            const line = parseInt(m[1] || '1', 10);
+            const col = parseInt(m[2] || '1', 10);
+            addMarker(line, col || 1, stderr.trim());
+          }
+        } else if (selectedLanguage === 'python') {
+          const re = /line\s+(\d+)/g;
+          let m;
+          while ((m = re.exec(stderr)) !== null) {
+            const line = parseInt(m[1] || '1', 10);
+            addMarker(line, 1, stderr.trim());
+          }
+        } else if (selectedLanguage === 'c' || selectedLanguage === 'cpp') {
+          const re = /:(\d+):(\d+):\s+error:/g;
+          let m;
+          while ((m = re.exec(stderr)) !== null) {
+            const line = parseInt(m[1] || '1', 10);
+            const col = parseInt(m[2] || '1', 10);
+            addMarker(line, col, stderr.trim());
+          }
+        } else if (selectedLanguage === 'java') {
+          const re = /:(\d+):\s+error:/g;
+          let m;
+          while ((m = re.exec(stderr)) !== null) {
+            const line = parseInt(m[1] || '1', 10);
+            addMarker(line, 1, stderr.trim());
+          }
+        }
+      }
+
+      // Apply markers to Monaco
+      // @ts-ignore
+      const monacoAny = (window as any).monaco;
+      if (monacoAny) {
+        monacoAny.editor.setModelMarkers(monacoModel, 'owner', markers);
+      }
+
+      // Mirror in our sidebar list
+      const sidebarErrors: SyntaxError[] = markers.map((mk) => ({
+        line: mk.startLineNumber,
+        column: mk.startColumn,
+        message: stderr || 'Compilation error',
+        severity: 'error'
+      }));
+      setSyntaxErrors(sidebarErrors);
+      setHasSyntaxErrors(sidebarErrors.length > 0);
+    } catch (_) {
+      // Do not clear markers on failures; persist until a successful, clean check
+    }
+  };
 
   const handleLanguageChange = (newLanguage: string) => {
     setSelectedLanguage(newLanguage);
@@ -182,7 +278,7 @@ function App() {
           }));
         } catch (error) {
           // Fallback: use only custom validation
-          console.log('Monaco markers not available, using custom validation only');
+          // Monaco markers not available, using custom validation only
         }
         
         // Combine Monaco errors with custom validation
@@ -232,110 +328,44 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const current = editorRef.current;
-      if (!current) return;
-      const monacoModel = current.getModel?.();
-      if (!monacoModel) return;
-      if (!code.trim()) {
-        // Clear markers and state
-        // @ts-ignore
-        const monacoAny = (window as any).monaco;
-        if (monacoAny) {
-          monacoAny.editor.setModelMarkers(monacoModel, 'owner', []);
-        }
-        setSyntaxErrors([]);
-        setHasSyntaxErrors(false);
-        return;
-      }
-
       // Small debounce
       await new Promise(r => setTimeout(r, 350));
       if (cancelled) return;
-
-      try {
-        const resp = await axios.post('http://localhost:3000/check', {
-          language: selectedLanguage,
-          code
-        });
-        if (cancelled) return;
-
-        const stderr: string = resp.data?.stderr || '';
-
-        // Parse stderr into Monaco markers (best-effort, per language)
-        const markers: any[] = [];
-        const addMarker = (line: number, column: number, message: string) => {
-          markers.push({
-            startLineNumber: Math.max(1, line),
-            startColumn: Math.max(1, column),
-            endLineNumber: Math.max(1, line),
-            endColumn: Math.max(1, column + 1),
-            message,
-            severity: 8 // monaco.MarkerSeverity.Error
-          });
-        };
-
-        if (stderr) {
-          if (selectedLanguage === 'javascript') {
-            // Node --check error format example: /work/file.js:3
-            const re = /:(\d+)(?::(\d+))?/g;
-            let m;
-            while ((m = re.exec(stderr)) !== null) {
-              const line = parseInt(m[1] || '1', 10);
-              const col = parseInt(m[2] || '1', 10);
-              addMarker(line, col || 1, stderr.trim());
-            }
-          } else if (selectedLanguage === 'python') {
-            // py_compile traceback lines typically: File "...", line 3
-            const re = /line\s+(\d+)/g;
-            let m;
-            while ((m = re.exec(stderr)) !== null) {
-              const line = parseInt(m[1] || '1', 10);
-              addMarker(line, 1, stderr.trim());
-            }
-          } else if (selectedLanguage === 'c' || selectedLanguage === 'cpp') {
-            // gcc/g++: file.c:12:5: error: ...
-            const re = /:(\d+):(\d+):\s+error:/g;
-            let m;
-            while ((m = re.exec(stderr)) !== null) {
-              const line = parseInt(m[1] || '1', 10);
-              const col = parseInt(m[2] || '1', 10);
-              addMarker(line, col, stderr.trim());
-            }
-          } else if (selectedLanguage === 'java') {
-            // javac: Main.java:6: error: ...
-            const re = /:(\d+):\s+error:/g;
-            let m;
-            while ((m = re.exec(stderr)) !== null) {
-              const line = parseInt(m[1] || '1', 10);
-              addMarker(line, 1, stderr.trim());
-            }
-          }
-        }
-
-        // Apply markers to Monaco
-        // @ts-ignore
-        const monacoAny = (window as any).monaco;
-        if (monacoAny) {
-          monacoAny.editor.setModelMarkers(monacoModel, 'owner', markers);
-        }
-
-        // Mirror in our sidebar list
-        const sidebarErrors: SyntaxError[] = markers.map((mk) => ({
-          line: mk.startLineNumber,
-          column: mk.startColumn,
-          message: stderr || 'Compilation error',
-          severity: 'error'
-        }));
-        setSyntaxErrors(sidebarErrors);
-        setHasSyntaxErrors(sidebarErrors.length > 0);
-      } catch (e) {
-        // Network or other failures: do not block editing
-      }
+      await performSyntaxCheck();
     };
 
     run();
     return () => { cancelled = true; };
   }, [code, selectedLanguage]);
+
+  // When an error is present, keep re-checking every 350ms until resolved
+  useEffect(() => {
+    if (hasSyntaxErrors) {
+      pollRef.current = true;
+      const loop = async () => {
+        if (!pollRef.current) return;
+        await performSyntaxCheck();
+        if (pollRef.current) {
+          pollTimeoutRef.current = window.setTimeout(loop, 350);
+        }
+      };
+      loop();
+      return () => {
+        pollRef.current = false;
+        if (pollTimeoutRef.current !== null) {
+          clearTimeout(pollTimeoutRef.current);
+          pollTimeoutRef.current = null;
+        }
+      };
+    } else {
+      // Stop polling when errors are resolved
+      pollRef.current = false;
+      if (pollTimeoutRef.current !== null) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+    }
+  }, [hasSyntaxErrors]);
 
   const runCode = async () => {
     if (!code.trim()) {
