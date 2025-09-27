@@ -47,7 +47,10 @@ const sessionEventSchema = new mongoose.Schema({
 // ADD THIS NEW SUB-SCHEMA
 const lineVersionSchema = new mongoose.Schema({
   timestamp: { type: Number, required: true },
-  content: { type: String, required: true }
+  // Content can be omitted for metrics-only entries
+  content: { type: String, required: false },
+  // Optional metrics snapshot for the line at this time
+  metrics: { type: mongoose.Schema.Types.Mixed, required: false }
 }, { _id: false });
 
 const sessionSchema = new mongoose.Schema({
@@ -139,9 +142,9 @@ app.post("/session/event", async (req, res) => {
     
     if (mongoConnected) {
       try {
-        // Separate events into raw deltas and our new line updates
-        const rawEvents = events.filter(e => e.type !== 'LINE_UPDATE');
-        const lineUpdates = events.filter(e => e.type === 'LINE_UPDATE');
+        // Separate events into raw deltas and our new line updates/metrics
+        const rawEvents = events.filter(e => e.type !== 'LINE_UPDATE' && e.type !== 'LINE_METRICS');
+        const lineRelated = events.filter(e => e.type === 'LINE_UPDATE' || e.type === 'LINE_METRICS');
 
         const updateOps = {};
 
@@ -150,26 +153,38 @@ app.post("/session/event", async (req, res) => {
           updateOps.$push = { events: { $each: rawEvents } };
         }
 
-        // Prepare push operations for each line version update
-        for (const update of lineUpdates) {
-          const { lineNumber, content } = update.payload;
+        // Prepare push operations for each line version update/metrics
+        let metricsCount = 0;
+        for (const update of lineRelated) {
+          const { lineNumber, content, metrics } = update.payload || {};
           const timestamp = update.timestamp;
-          
+
+          if (typeof lineNumber !== 'number') continue;
+
           // Using dot notation to push into the array within the map field
           const field = `lineHistory.${lineNumber}`;
           if (!updateOps.$push) updateOps.$push = {};
-          
+
           // Ensure the array exists for this line number before pushing
           if (!updateOps.$push[field]) {
             updateOps.$push[field] = { $each: [] };
           }
-          updateOps.$push[field].$each.push({ timestamp, content });
+
+          const entry = { timestamp };
+          if (typeof content === 'string') entry.content = content;
+          if (metrics && typeof metrics === 'object') entry.metrics = metrics;
+          updateOps.$push[field].$each.push(entry);
+          if (entry.metrics) metricsCount++;
         }
         
         // Only run the update if there's something to do
         if (Object.keys(updateOps).length > 0) {
             await SessionModel.updateOne({ sessionId }, updateOps);
-            console.log(`Events processed for session: ${sessionId} (${events.length} total)`);
+            if (lineRelated.length > 0) {
+              console.log(`Session ${sessionId}: appended ${lineRelated.length} line entries (${metricsCount} with metrics)`);
+            } else {
+              console.log(`Events processed for session: ${sessionId} (${events.length} total)`);
+            }
         }
 
       } catch (mongoErr) {
@@ -483,6 +498,21 @@ app.get("/session/:sessionId", async (req, res) => {
           startTime: session.startTime,
           endTime: session.endTime,
           events: session.events,
+          // Expose a summary for quick verification
+          lineHistorySummary: (() => {
+            try {
+              const map = session.lineHistory || new Map();
+              const result = {};
+              for (const [line, arr] of map.entries ? map.entries() : Object.entries(map)) {
+                const list = Array.isArray(arr) ? arr : [];
+                result[line] = {
+                  versions: list.length,
+                  metricsCount: list.filter(v => v && v.metrics).length
+                };
+              }
+              return result;
+            } catch (_) { return {}; }
+          })(),
           meta: session.meta
         });
       } catch (mongoErr) {

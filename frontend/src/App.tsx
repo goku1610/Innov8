@@ -219,6 +219,22 @@ function App() {
   const lineUpdateBufferRef = useRef<Record<number, { timestamp: number, content: string }>>({});
   const lineUpdateFlushTimerRef = useRef<number | null>(null);
 
+  // --- Metrics instrumentation refs ---
+  const activeLineRef = useRef<number | null>(null);
+  const lineStartTimeRef = useRef<number>(0);
+  const lineIdleAccumRef = useRef<number>(0);
+  const lastEventTimeRef = useRef<number>(0);
+  const idleThresholdMsRef = useRef<number>(3000);
+  const wordDurationsRef = useRef<number[]>([]); // rolling list of recent word durations
+  const maxWordDurationsRef = useRef<number>(200);
+  const churnEventsRef = useRef<Array<{ ts: number, line: number, added: number, deleted: number }>>([]);
+  const undoRedoEventsRef = useRef<Array<{ ts: number, line: number, kind: 'undo' | 'redo' }>>([]);
+  const keystrokeEventsRef = useRef<Array<{ ts: number, line: number, chars: number }>>([]);
+  const metricsWindowMsRef = useRef<number>(60000);
+  const churnRadiusRef = useRef<number>(5);
+  const lineMetricsBufferRef = useRef<Record<number, { timestamp: number, metrics: any }>>({});
+  const lineMetricsFlushTimerRef = useRef<number | null>(null);
+
   // Force-flush any queued events to the backend immediately
   const flushPendingEvents = useCallback(async () => {
     try {
@@ -273,6 +289,54 @@ function App() {
     }
   }, []);
 
+  // Compute trimmed mean and std for delays
+  const computeTrimmedStats = useCallback((values: number[]) => {
+    if (!values.length) return { mean: 0, std: 0 };
+    const sorted = [...values].sort((a, b) => a - b);
+    const trimCount = Math.floor(sorted.length * 0.1); // trim 10% on each side
+    const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+    const mean = trimmed.reduce((s, v) => s + v, 0) / Math.max(1, trimmed.length);
+    const variance = trimmed.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / Math.max(1, trimmed.length);
+    const std = Math.sqrt(variance);
+    return { mean, std };
+  }, []);
+
+  
+
+  const flushLineMetrics = useCallback(async () => {
+    try {
+      const currentSessionId = sessionIdRef.current;
+      const buffer = lineMetricsBufferRef.current;
+      if (!currentSessionId || Object.keys(buffer).length === 0) return;
+
+      const events = Object.entries(buffer).map(([lineNumber, data]) => ({
+        type: 'LINE_METRICS',
+        timestamp: data.timestamp,
+        payload: {
+          lineNumber: parseInt(lineNumber, 10),
+          metrics: data.metrics
+        }
+      }));
+      lineMetricsBufferRef.current = {};
+      await axios.post('http://localhost:3000/session/event', {
+        sessionId: currentSessionId,
+        events
+      });
+    } catch (err) {
+      // best-effort
+    }
+  }, []);
+
+  const bufferLineMetrics = useCallback((lineNumber: number, timestamp: number, metrics: any) => {
+    lineMetricsBufferRef.current[lineNumber] = { timestamp, metrics };
+    if (lineMetricsFlushTimerRef.current !== null) {
+      clearTimeout(lineMetricsFlushTimerRef.current);
+    }
+    lineMetricsFlushTimerRef.current = window.setTimeout(() => {
+      flushLineMetrics();
+    }, 750);
+  }, [flushLineMetrics]);
+
   // Semantic event detection functions
   const detectWordComplete = (currentCode: string, timestamp: number) => {
     const words = currentCode.split(/\s+/);
@@ -291,6 +355,11 @@ function App() {
           }
         };
         pendingEventsRef.current.push(event);
+        // Record duration for normalized delay stats
+        wordDurationsRef.current.push(timeSinceLastWord);
+        if (wordDurationsRef.current.length > maxWordDurationsRef.current) {
+          wordDurationsRef.current.shift();
+        }
         wordBufferRef.current = lastWord;
         lastWordTimeRef.current = timestamp;
       }
@@ -319,6 +388,73 @@ function App() {
       }
     }
   };
+
+  // Finalize metrics when leaving a line
+  const finalizeActiveLineMetrics = useCallback((nowAbs: number) => {
+    const active = activeLineRef.current;
+    if (!active) return;
+    const base = sessionStartTimeRef.current || nowAbs;
+    const now = nowAbs - base;
+
+    const activeDuration = Math.max(0, nowAbs - (lineStartTimeRef.current || nowAbs));
+    const idleMs = Math.max(0, lineIdleAccumRef.current);
+
+    // Delay outlier based on word durations
+    const { mean, std } = computeTrimmedStats(wordDurationsRef.current);
+    const significantDelayMs = Math.max(0, (lastEventTimeRef.current ? (nowAbs - lastEventTimeRef.current) : 0));
+    const isDelayOutlier = std > 0 && significantDelayMs > (mean + 2 * std);
+
+    // Churn within window and radius
+    const windowStart = nowAbs - metricsWindowMsRef.current;
+    const churnRadius = churnRadiusRef.current;
+    let added = 0, deleted = 0;
+    for (const ev of churnEventsRef.current) {
+      if (ev.ts >= windowStart && Math.abs(ev.line - active) <= churnRadius) {
+        added += ev.added;
+        deleted += ev.deleted;
+      }
+    }
+    const net = Math.max(1, Math.abs(added - deleted));
+    const churnRatio = (added + deleted) / net;
+
+    // Undo/redo rate within window and radius
+    let undoCount = 0, redoCount = 0;
+    for (const ev of undoRedoEventsRef.current) {
+      if (ev.ts >= windowStart && Math.abs(ev.line - active) <= churnRadius) {
+        if (ev.kind === 'undo') undoCount++; else redoCount++;
+      }
+    }
+
+    // Keystroke rate: chars over active editing seconds (approx by window or active)
+    let chars = 0;
+    for (const ev of keystrokeEventsRef.current) {
+      if (ev.ts >= windowStart && Math.abs(ev.line - active) <= churnRadius) {
+        chars += ev.chars;
+      }
+    }
+    const activeSeconds = Math.max(1, Math.floor((metricsWindowMsRef.current - Math.min(metricsWindowMsRef.current, idleMs)) / 1000));
+    const keystrokeRate = chars / activeSeconds;
+
+    // Idle detection flag
+    const idleFlag = idleMs > idleThresholdMsRef.current;
+
+    bufferLineMetrics(active, now, {
+      activeMs: activeDuration,
+      idleMs,
+      delayMs: significantDelayMs,
+      delayOutlier: isDelayOutlier,
+      churnRatio,
+      churnAdded: added,
+      churnDeleted: deleted,
+      undoCount,
+      redoCount,
+      keystrokeRate,
+      idleFlag
+    });
+
+    // Reset accumulators for next line
+    lineIdleAccumRef.current = 0;
+  }, [bufferLineMetrics, computeTrimmedStats]);
 
   const detectCodeRun = (currentCode: string, timestamp: number) => {
     // This will be called when the run button is clicked
@@ -1074,6 +1210,59 @@ function App() {
             }
         }
 
+        // 2b. Metrics: compute churn, undo/redo, keystroke counters
+        const startLine = (e.changes?.[0]?.range?.startLineNumber) || 1;
+        const endLine = (e.changes?.[0]?.range?.endLineNumber) || startLine;
+        const centerLine = Math.floor((startLine + endLine) / 2);
+        let totalAdded = 0;
+        let totalDeleted = 0;
+        for (const c of e.changes || []) {
+          const addedLen = (c.text || '').length;
+          const deletedLen = Math.max(0, c.rangeLength || 0);
+          totalAdded += addedLen;
+          totalDeleted += deletedLen;
+        }
+        churnEventsRef.current.push({ ts: now, line: centerLine, added: totalAdded, deleted: totalDeleted });
+        if (e.isUndoing) undoRedoEventsRef.current.push({ ts: now, line: centerLine, kind: 'undo' });
+        if (e.isRedoing) undoRedoEventsRef.current.push({ ts: now, line: centerLine, kind: 'redo' });
+        if (totalAdded > 0) keystrokeEventsRef.current.push({ ts: now, line: centerLine, chars: totalAdded });
+
+        // Evict old windowed events to bound memory
+        const windowStartEvict = now - metricsWindowMsRef.current * 2; // keep 2x window
+        if (churnEventsRef.current.length > 2000) {
+          churnEventsRef.current = churnEventsRef.current.filter(ev => ev.ts >= windowStartEvict);
+        }
+        if (undoRedoEventsRef.current.length > 1000) {
+          undoRedoEventsRef.current = undoRedoEventsRef.current.filter(ev => ev.ts >= windowStartEvict);
+        }
+        if (keystrokeEventsRef.current.length > 2000) {
+          keystrokeEventsRef.current = keystrokeEventsRef.current.filter(ev => ev.ts >= windowStartEvict);
+        }
+
+        // Track active line and idle accumulation
+        const currentActiveLine = centerLine;
+        if (activeLineRef.current === null) {
+          activeLineRef.current = currentActiveLine;
+          lineStartTimeRef.current = now;
+          lineIdleAccumRef.current = 0;
+        } else if (activeLineRef.current !== currentActiveLine) {
+          // Leaving previous line; finalize metrics
+          finalizeActiveLineMetrics(now);
+          // Switch to new line
+          activeLineRef.current = currentActiveLine;
+          lineStartTimeRef.current = now;
+          lineIdleAccumRef.current = 0;
+        }
+
+        // Idle accumulation relative to last event
+        if (lastEventTimeRef.current > 0) {
+          const gap = now - lastEventTimeRef.current;
+          if (gap >= idleThresholdMsRef.current && activeLineRef.current === currentActiveLine) {
+            lineIdleAccumRef.current += gap;
+          }
+        }
+        lastEventTimeRef.current = now;
+
         // 3. Debounce sending the buffered line updates to the server
         if (lineUpdateFlushTimerRef.current !== null) {
           clearTimeout(lineUpdateFlushTimerRef.current);
@@ -1158,6 +1347,15 @@ function App() {
     // Set up the editor
     configureLanguage();
     setupSyntaxChecking();
+
+    // Cursor movement: finalize metrics when moving off a line
+    try {
+      editor.onDidChangeCursorPosition(() => {
+        const nowAbs = Date.now();
+        finalizeActiveLineMetrics(nowAbs);
+        // Reset start for new active line will be handled on next edit event
+      });
+    } catch (_) {}
   };
 
   // Stop session on unmount
@@ -1165,10 +1363,14 @@ function App() {
     const handleBeforeUnload = async () => {
       // Best-effort flush of last events
       try { await flushPendingEvents(); } catch(_) {}
+      try { await flushLineUpdates(); } catch(_) {}
+      try { await (async () => { const f = (flushLineMetrics as any); if (typeof f === 'function') await f(); })(); } catch(_) {}
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     const handleVisibility = async () => {
       try { await flushPendingEvents(); } catch(_) {}
+      try { await flushLineUpdates(); } catch(_) {}
+      try { await (async () => { const f = (flushLineMetrics as any); if (typeof f === 'function') await f(); })(); } catch(_) {}
     };
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handleVisibility);
@@ -1180,12 +1382,12 @@ function App() {
       const sid = sessionIdRef.current;
       if (sid) {
         // Flush pending events before stopping the session
-        flushPendingEvents().finally(() => {
+        Promise.resolve().then(() => flushPendingEvents()).then(() => flushLineUpdates()).then(() => (flushLineMetrics as any)()).finally(() => {
           axios.post('http://localhost:3000/session/stop', { sessionId: sid }).catch(() => {});
         });
       }
     };
-  }, [flushPendingEvents]);
+  }, [flushPendingEvents, flushLineUpdates, flushLineMetrics]);
 
   // Debounced server-side compile/syntax checks and Monaco markers
   useEffect(() => {
