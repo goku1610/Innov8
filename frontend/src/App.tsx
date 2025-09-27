@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import './App.css';
@@ -180,6 +181,7 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
 };
 
 function App() {
+  const navigate = useNavigate();
   const [selectedLanguage, setSelectedLanguage] = useState('python');
   const [code, setCode] = useState(DEFAULT_CODE.python);
   const [result, setResult] = useState<ExecutionResult | null>(null);
@@ -1395,6 +1397,7 @@ function App() {
       <header className="app-header">
         <h1>Code Execution Platform</h1>
         <div className="header-controls">
+          <button onClick={() => navigate('/analytics')} style={{ marginRight: 12 }}>Analytics</button>
           <div className="language-selector">
             <label htmlFor="language-select">Language: </label>
             <select
