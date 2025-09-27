@@ -57,9 +57,230 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
   const [hasSyntaxErrors, setHasSyntaxErrors] = useState(false);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState(1);
+  const [replayProgress, setReplayProgress] = useState(0);
+  const [replayEvents, setReplayEvents] = useState<any[]>([]);
+  const [replaySession, setReplaySession] = useState<any>(null);
+  const [currentReplayEvent, setCurrentReplayEvent] = useState<any>(null);
   const editorRef = useRef<any>(null);
   const pollRef = useRef<boolean>(false);
   const pollTimeoutRef = useRef<number | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionStartTimeRef = useRef<number | null>(null);
+  const pendingEventsRef = useRef<any[]>([]);
+  const lastFlushRef = useRef<number>(0);
+  const lastCodeRef = useRef<string>('');
+  const wordBufferRef = useRef<string>('');
+  const lineBufferRef = useRef<string>('');
+  const lastWordTimeRef = useRef<number>(0);
+  const lastLineTimeRef = useRef<number>(0);
+  const isReplayingRef = useRef<boolean>(false);
+
+  // Semantic event detection functions
+  const detectWordComplete = (currentCode: string, timestamp: number) => {
+    const words = currentCode.split(/\s+/);
+    const lastWord = words[words.length - 1];
+    
+    if (lastWord !== wordBufferRef.current && lastWord.length > 0) {
+      const timeSinceLastWord = timestamp - lastWordTimeRef.current;
+      if (timeSinceLastWord > 500) { // 500ms pause indicates word completion
+        const event = {
+          timestamp: timestamp - (sessionStartTimeRef.current || timestamp),
+          type: 'WORD_COMPLETE',
+          payload: {
+            word: wordBufferRef.current,
+            position: currentCode.lastIndexOf(wordBufferRef.current),
+            duration: timeSinceLastWord
+          }
+        };
+        pendingEventsRef.current.push(event);
+        wordBufferRef.current = lastWord;
+        lastWordTimeRef.current = timestamp;
+      }
+    }
+  };
+
+  const detectLineComplete = (currentCode: string, timestamp: number) => {
+    const lines = currentCode.split('\n');
+    const lastLine = lines[lines.length - 1];
+    
+    if (lastLine !== lineBufferRef.current && lastLine.trim().length > 0) {
+      const timeSinceLastLine = timestamp - lastLineTimeRef.current;
+      if (timeSinceLastLine > 1000) { // 1s pause indicates line completion
+        const event = {
+          timestamp: timestamp - (sessionStartTimeRef.current || timestamp),
+          type: 'LINE_COMPLETE',
+          payload: {
+            line: lineBufferRef.current,
+            lineNumber: lines.length - 1,
+            duration: timeSinceLastLine
+          }
+        };
+        pendingEventsRef.current.push(event);
+        lineBufferRef.current = lastLine;
+        lastLineTimeRef.current = timestamp;
+      }
+    }
+  };
+
+  const detectCodeRun = (currentCode: string, timestamp: number) => {
+    // This will be called when the run button is clicked
+    const event = {
+      timestamp: timestamp - (sessionStartTimeRef.current || timestamp),
+      type: 'CODE_RUN',
+      payload: {
+        codeLength: currentCode.length,
+        lineCount: currentCode.split('\n').length,
+        language: selectedLanguage
+      }
+    };
+    pendingEventsRef.current.push(event);
+  };
+
+  // Replay functionality
+  const startReplay = async (sessionId: string) => {
+    try {
+      // Fetch session data from backend
+      const response = await axios.get(`http://localhost:3000/session/${sessionId}`);
+      const sessionData = response.data;
+      
+      setReplaySession(sessionData);
+      setReplayEvents(sessionData.events || []);
+      setIsReplaying(true);
+      isReplayingRef.current = true;
+      setReplayProgress(0);
+      
+      // Start with initial code
+      setCode(sessionData.initialCode);
+      setSelectedLanguage(sessionData.language);
+      
+      // Start replay after a short delay
+      setTimeout(() => {
+        replayCompleteSession(sessionData.events || []);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Failed to load session for replay:', error);
+    }
+  };
+
+  const replayCompleteSession = (events: any[]) => {
+    if (!events.length) return;
+    
+    // Sort events by timestamp to ensure chronological order
+    const sortedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
+    
+    let currentIndex = 0;
+    const totalEvents = sortedEvents.length;
+    
+    const replayNextEvent = () => {
+      if (currentIndex >= totalEvents || !isReplayingRef.current) {
+        setIsReplaying(false);
+        isReplayingRef.current = false;
+        console.log('Replay completed');
+        return;
+      }
+      
+      const event = sortedEvents[currentIndex];
+      const nextEvent = sortedEvents[currentIndex + 1];
+      
+      // Show current event being replayed
+      setCurrentReplayEvent(event);
+      
+      // Debug logging
+      console.log(`Replaying event ${currentIndex + 1}/${totalEvents}:`, event);
+      
+      // Apply the edit to the editor
+      applyReplayEdit(event);
+      
+      // Calculate delay to next event (preserve original timing)
+      const delay = nextEvent ? (nextEvent.timestamp - event.timestamp) / replaySpeed : 0;
+      
+      currentIndex++;
+      setReplayProgress((currentIndex / totalEvents) * 100);
+      
+      if (isReplayingRef.current) {
+        // Use original timing but with speed control
+        setTimeout(replayNextEvent, Math.max(20, delay)); // Minimum 20ms delay
+      }
+    };
+    
+    replayNextEvent();
+  };
+
+  const applyReplayEdit = (event: any) => {
+    const editor = editorRef.current;
+    if (!editor) {
+      console.log('No editor ref available');
+    }
+    
+    const model = editor?.getModel();
+    if (!model) {
+      console.log('No model available');
+      return;
+    }
+    
+    // Only process EDIT events for Monaco replay
+    if (event.type !== 'EDIT') {
+      console.log(`Skipping non-EDIT event: ${event.type}`);
+      return;
+    }
+    
+    console.log('Applying edit:', event.payload.changes);
+    
+    // Apply each change individually to simulate real typing
+    event.payload.changes.forEach((change: any) => {
+      const range = {
+        startLineNumber: change.range.startLineNumber,
+        startColumn: change.range.startColumn,
+        endLineNumber: change.range.endLineNumber,
+        endColumn: change.range.endColumn
+      };
+      
+      console.log('Applying change:', { range, text: change.text });
+      
+      // Apply the edit
+      model.pushEditOperations([], [{
+        range,
+        text: change.text,
+        forceMoveMarkers: false
+      }], () => null);
+      
+      // Update React state immediately
+      const newCode = model.getValue();
+      console.log('New code after edit:', newCode);
+      setCode(newCode);
+    });
+  };
+
+  const pauseReplay = () => {
+    setIsReplaying(false);
+    isReplayingRef.current = false;
+  };
+
+  const resumeReplay = () => {
+    if (replayEvents.length > 0) {
+      setIsReplaying(true);
+      isReplayingRef.current = true;
+      // Continue from current progress
+      const startIndex = Math.floor((replayProgress / 100) * replayEvents.length);
+      const remainingEvents = replayEvents.slice(startIndex);
+      replayCompleteSession(remainingEvents);
+    }
+  };
+
+  const stopReplay = () => {
+    setIsReplaying(false);
+    isReplayingRef.current = false;
+    setReplayProgress(0);
+    setReplayEvents([]);
+    setReplaySession(null);
+  };
+
+  const changeReplaySpeed = (speed: number) => {
+    setReplaySpeed(speed);
+  };
 
   // Centralized syntax check that applies Monaco markers and updates sidebar state
   const performSyntaxCheck = async () => {
@@ -165,6 +386,18 @@ function App() {
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
+    // Start a new recording session
+    (async () => {
+      try {
+        const resp = await axios.post('http://localhost:3000/session/start', {
+          language: selectedLanguage,
+          initialCode: editor.getValue(),
+          meta: { userAgent: navigator.userAgent }
+        });
+        sessionIdRef.current = resp.data?.sessionId || null;
+        sessionStartTimeRef.current = resp.data?.startTime || Date.now();
+      } catch (_) {}
+    })();
     
     // Set up syntax checking using the correct Monaco API
     const setupSyntaxChecking = () => {
@@ -290,9 +523,59 @@ function App() {
       };
 
       // Listen for model changes
-      model.onDidChangeContent(() => {
+      model.onDidChangeContent((e: any) => {
+        // If we are replaying, ignore editor-driven changes to avoid feedback loops
+        if (isReplayingRef.current) {
+          return;
+        }
         // Debounce the marker updates
         setTimeout(updateMarkers, 500);
+        
+        // Record keystroke event for session (event sourcing)
+        const now = Date.now();
+        const base = sessionStartTimeRef.current || now;
+        const currentCode = model.getValue();
+        
+        // Keystroke-level event (for Monaco replay)
+        const keystrokeEvent = {
+          timestamp: now - base,
+          type: 'EDIT',
+          payload: {
+            changes: (e?.changes || []).map((c: any) => ({
+              rangeOffset: c.rangeOffset,
+              rangeLength: c.rangeLength,
+              text: c.text,
+              range: {
+                startLineNumber: c.range?.startLineNumber,
+                startColumn: c.range?.startColumn,
+                endLineNumber: c.range?.endLineNumber,
+                endColumn: c.range?.endColumn
+              }
+            }))
+          }
+        };
+        pendingEventsRef.current.push(keystrokeEvent);
+        
+        // Detect semantic events
+        detectWordComplete(currentCode, now);
+        detectLineComplete(currentCode, now);
+        
+        // Update buffers
+        lastCodeRef.current = currentCode;
+        
+        // Throttle flush to backend (~500ms)
+        const shouldFlush = now - (lastFlushRef.current || 0) > 500;
+        if (shouldFlush && sessionIdRef.current && pendingEventsRef.current.length) {
+          const toSend = pendingEventsRef.current.splice(0, pendingEventsRef.current.length);
+          lastFlushRef.current = now;
+          axios.post('http://localhost:3000/session/event', {
+            sessionId: sessionIdRef.current,
+            events: toSend
+          }).catch(() => {
+            // On failure, re-queue toSend
+            pendingEventsRef.current.unshift(...toSend);
+          });
+        }
       });
 
       // Initial marker check
@@ -323,6 +606,16 @@ function App() {
     configureLanguage();
     setupSyntaxChecking();
   };
+
+  // Stop session on unmount
+  useEffect(() => {
+    return () => {
+      const sid = sessionIdRef.current;
+      if (sid) {
+        axios.post('http://localhost:3000/session/stop', { sessionId: sid }).catch(() => {});
+      }
+    };
+  }, []);
 
   // Debounced server-side compile/syntax checks and Monaco markers
   useEffect(() => {
@@ -512,33 +805,201 @@ function App() {
     <div className="App">
       <header className="app-header">
         <h1>Code Execution Platform</h1>
-        <div className="language-selector">
-          <label htmlFor="language-select">Language: </label>
-          <select
-            id="language-select"
-            value={selectedLanguage}
-            onChange={(e) => handleLanguageChange(e.target.value)}
-          >
-            {LANGUAGES.map(lang => (
-              <option key={lang.value} value={lang.value}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
+        <div className="header-controls">
+          <div className="language-selector">
+            <label htmlFor="language-select">Language: </label>
+            <select
+              id="language-select"
+              value={selectedLanguage}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+            >
+              {LANGUAGES.map(lang => (
+                <option key={lang.value} value={lang.value}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="session-selector">
+            <label htmlFor="session">Replay Session:</label>
+            <input 
+              id="session"
+              type="text" 
+              placeholder="Enter session ID"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  const sessionId = e.currentTarget.value.trim();
+                  if (sessionId) {
+                    startReplay(sessionId);
+                  }
+                }
+              }}
+            />
+            <button 
+              onClick={() => {
+                const input = document.getElementById('session') as HTMLInputElement;
+                const sessionId = input?.value.trim();
+                if (sessionId) {
+                  startReplay(sessionId);
+                }
+              }}
+            >
+              Load
+            </button>
+            <button 
+              onClick={() => {
+                // Test with sample data
+                const sampleSession = {
+                  sessionId: 'test-session',
+                  language: 'python',
+                  initialCode: '',
+                  events: [
+                    {
+                      timestamp: 0,
+                      type: 'EDIT',
+                      payload: {
+                        changes: [{
+                          range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
+                          text: 'p'
+                        }]
+                      }
+                    },
+                    {
+                      timestamp: 100,
+                      type: 'EDIT',
+                      payload: {
+                        changes: [{
+                          range: { startLineNumber: 1, startColumn: 2, endLineNumber: 1, endColumn: 2 },
+                          text: 'r'
+                        }]
+                      }
+                    },
+                    {
+                      timestamp: 200,
+                      type: 'EDIT',
+                      payload: {
+                        changes: [{
+                          range: { startLineNumber: 1, startColumn: 3, endLineNumber: 1, endColumn: 3 },
+                          text: 'i'
+                        }]
+                      }
+                    },
+                    {
+                      timestamp: 300,
+                      type: 'EDIT',
+                      payload: {
+                        changes: [{
+                          range: { startLineNumber: 1, startColumn: 4, endLineNumber: 1, endColumn: 4 },
+                          text: 'n'
+                        }]
+                      }
+                    },
+                    {
+                      timestamp: 400,
+                      type: 'EDIT',
+                      payload: {
+                        changes: [{
+                          range: { startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 5 },
+                          text: 't'
+                        }]
+                      }
+                    }
+                  ]
+                };
+                
+                setReplaySession(sampleSession);
+                setReplayEvents(sampleSession.events);
+                setIsReplaying(true);
+                isReplayingRef.current = true;
+                setReplayProgress(0);
+                setCode(sampleSession.initialCode);
+                setSelectedLanguage(sampleSession.language);
+                
+                setTimeout(() => {
+                  replayCompleteSession(sampleSession.events);
+                }, 1000);
+              }}
+            >
+              Test
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="main-container">
         <div className="editor-section">
           <div className="editor-header">
-            <h3>Code Editor</h3>
-            <button 
-              className={`run-button ${hasSyntaxErrors ? 'has-errors' : ''}`}
-              onClick={runCode} 
-              disabled={isRunning}
-            >
-              {isRunning ? 'Running...' : 'Run Code'}
-            </button>
+            <div className="editor-title">
+              <h3>Code Editor</h3>
+              {isReplaying && replaySession && (
+                <div className="replay-info">
+                  <span className="replay-indicator">🔴 REPLAYING</span>
+                  <span className="session-info">
+                    Session: {replaySession.sessionId?.substring(0, 8)}... | 
+                    Language: {replaySession.language} | 
+                    Events: {replayEvents.length}
+                  </span>
+                  {currentReplayEvent && (
+                    <div className="current-event">
+                      <span className="event-type">{currentReplayEvent.type}</span>
+                      <span className="event-time">+{currentReplayEvent.timestamp}ms</span>
+                      {currentReplayEvent.type === 'EDIT' && currentReplayEvent.payload.changes[0] && (
+                        <span className="event-text">
+                          "{currentReplayEvent.payload.changes[0].text}"
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="button-group">
+              {!isReplaying ? (
+                <button 
+                  className={`run-button ${hasSyntaxErrors ? 'has-errors' : ''}`}
+                  onClick={runCode} 
+                  disabled={isRunning}
+                >
+                  {isRunning ? 'Running...' : 'Run Code'}
+                </button>
+              ) : (
+                <div className="replay-controls">
+                  <button 
+                    className="replay-button"
+                    onClick={isReplaying ? pauseReplay : resumeReplay}
+                  >
+                    {isReplaying ? 'Pause' : 'Resume'}
+                  </button>
+                  <button 
+                    className="replay-button"
+                    onClick={stopReplay}
+                  >
+                    Stop
+                  </button>
+                  <div className="replay-speed">
+                    <label>Speed:</label>
+                    <select 
+                      value={replaySpeed} 
+                      onChange={(e) => changeReplaySpeed(parseFloat(e.target.value))}
+                    >
+                      <option value={0.5}>0.5x</option>
+                      <option value={1}>1x</option>
+                      <option value={2}>2x</option>
+                      <option value={4}>4x</option>
+                    </select>
+                  </div>
+                  <div className="replay-progress">
+                    <div className="progress-bar">
+                      <div 
+                        className="progress-fill" 
+                        style={{ width: `${replayProgress}%` }}
+                      ></div>
+                    </div>
+                    <span>{Math.round(replayProgress)}%</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="editor-container">

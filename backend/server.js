@@ -5,6 +5,7 @@ import { v4 as uuid } from "uuid";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import mongoose from "mongoose";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +13,134 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json());
 app.use(cors());
+// MongoDB connection with retry logic
+const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/hack";
+let mongoConnected = false;
+
+const connectMongo = async () => {
+  try {
+    await mongoose.connect(MONGO_URI, { 
+      dbName: "hack",
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
+      bufferCommands: false
+    });
+    mongoConnected = true;
+    console.log("MongoDB connected");
+  } catch (err) {
+    console.error("MongoDB connection error:", err.message);
+    mongoConnected = false;
+    // Retry connection after 5 seconds
+    setTimeout(connectMongo, 5000);
+  }
+};
+
+connectMongo();
+
+// Session schema/model
+const sessionEventSchema = new mongoose.Schema({
+  timestamp: { type: Number, required: true },
+  type: { type: String, required: true },
+  payload: { type: mongoose.Schema.Types.Mixed, required: true }
+}, { _id: false });
+
+const sessionSchema = new mongoose.Schema({
+  sessionId: { type: String, index: true },
+  userId: { type: String },
+  language: { type: String, required: true },
+  initialCode: { type: String, required: true },
+  startTime: { type: Number, required: true },
+  endTime: { type: Number },
+  events: { type: [sessionEventSchema], default: [] },
+  meta: { type: mongoose.Schema.Types.Mixed }
+}, { timestamps: true });
+
+const SessionModel = mongoose.model("Session", sessionSchema);
+
+// Session endpoints
+app.post("/session/start", async (req, res) => {
+  try {
+    const { userId, language, initialCode, meta } = req.body || {};
+    if (!language || typeof initialCode !== 'string') {
+      return res.status(400).json({ error: "language and initialCode are required" });
+    }
+    const sessionId = uuid();
+    const startTime = Date.now();
+    
+    if (mongoConnected) {
+      try {
+        await SessionModel.create({ sessionId, userId: userId || null, language, initialCode, startTime, meta: meta || {} });
+        console.log(`Session started: ${sessionId}`);
+      } catch (mongoErr) {
+        console.error("MongoDB save error:", mongoErr.message);
+        // Continue without failing the request
+      }
+    } else {
+      console.log("MongoDB not connected, session not saved:", sessionId);
+    }
+    
+    return res.json({ ok: true, sessionId, startTime });
+  } catch (e) {
+    console.error("/session/start error:", e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/session/event", async (req, res) => {
+  try {
+    const { sessionId, events } = req.body || {};
+    if (!sessionId || !Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ error: "sessionId and non-empty events are required" });
+    }
+    
+    if (mongoConnected) {
+      try {
+        await SessionModel.updateOne(
+          { sessionId },
+          { $push: { events: { $each: events } } }
+        );
+        console.log(`Events added to session: ${sessionId} (${events.length} events)`);
+      } catch (mongoErr) {
+        console.error("MongoDB update error:", mongoErr.message);
+        // Continue without failing the request
+      }
+    } else {
+      console.log("MongoDB not connected, events not saved:", sessionId);
+    }
+    
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("/session/event error:", e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/session/stop", async (req, res) => {
+  try {
+    const { sessionId } = req.body || {};
+    if (!sessionId) {
+      return res.status(400).json({ error: "sessionId is required" });
+    }
+    const endTime = Date.now();
+    
+    if (mongoConnected) {
+      try {
+        await SessionModel.updateOne({ sessionId }, { $set: { endTime } });
+        console.log(`Session stopped: ${sessionId}`);
+      } catch (mongoErr) {
+        console.error("MongoDB update error:", mongoErr.message);
+        // Continue without failing the request
+      }
+    } else {
+      console.log("MongoDB not connected, session not stopped:", sessionId);
+    }
+    
+    return res.json({ ok: true, endTime });
+  } catch (e) {
+    console.error("/session/stop error:", e);
+    return res.status(500).json({ error: e.message });
+  }
+});
 
 // Ensure tmp directory exists
 const tmpDir = path.join(__dirname, "../tmp");
@@ -227,6 +356,44 @@ app.post("/run", async (req, res) => {
     res.status(500).json({ 
       error: "Internal server error: " + error.message 
     });
+  }
+});
+
+// Get session data for replay
+app.get("/session/:sessionId", async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res.status(400).json({ error: "sessionId is required" });
+    }
+    
+    if (mongoConnected) {
+      try {
+        const session = await SessionModel.findOne({ sessionId });
+        if (!session) {
+          return res.status(404).json({ error: "Session not found" });
+        }
+        
+        return res.json({
+          sessionId: session.sessionId,
+          userId: session.userId,
+          language: session.language,
+          initialCode: session.initialCode,
+          startTime: session.startTime,
+          endTime: session.endTime,
+          events: session.events,
+          meta: session.meta
+        });
+      } catch (mongoErr) {
+        console.error("MongoDB query error:", mongoErr.message);
+        return res.status(500).json({ error: "Database error" });
+      }
+    } else {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+  } catch (e) {
+    console.error("/session/:sessionId error:", e);
+    return res.status(500).json({ error: e.message });
   }
 });
 
