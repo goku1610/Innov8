@@ -1,12 +1,16 @@
 from groq import Groq
 
-def generate_response(prompt):
+def generate_response(prompt, system_prompt=None):
     client = Groq()
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    
     completion = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
+        messages=messages,
         temperature=1,
         max_completion_tokens=1024,
         top_p=1,

@@ -135,11 +135,22 @@ async def generate_text_response_full(code: str, session_id: Optional[str], metr
         use_metrics["progressiveSeconds"] = progressive_ts
 
     prompt = _build_prompt(code, use_metrics or None, context_sections)
-    response = await asyncio.to_thread(generate_response, prompt)
+    
+    # System prompt to guide the LLM's behavior
+    system_prompt = """You are an AI coding assistant that helps developers with their code. 
+    When analyzing code, focus on:
+    - Identifying bugs and potential issues
+    - Suggesting improvements and optimizations
+    - Explaining code behavior and logic
+    - Providing clear, actionable feedback
+    
+    Be concise but thorough in your responses. If you see errors in the code, explain what's wrong and suggest fixes."""
+    
+    response = await asyncio.to_thread(generate_response, prompt, system_prompt)
 
     # Best-effort file log
     try:
-        append_prompt_response(prompt, response, session_id=session_id)
+        append_prompt_response(prompt, response, session_id=session_id, system_prompt=system_prompt)
     except Exception:
         pass
 

@@ -10,7 +10,7 @@ def _get_log_path() -> Path:
     return tmp_dir / "llm_responses.log"
 
 
-def append_prompt_response(prompt: str, response: str, session_id: Optional[str] = None) -> None:
+def append_prompt_response(prompt: str, response: str, session_id: Optional[str] = None, system_prompt: Optional[str] = None) -> None:
     """Append a prompt/response pair to a temp log file with a timestamp.
 
     This is intended for temporary, best-effort logging during development.
@@ -22,6 +22,9 @@ def append_prompt_response(prompt: str, response: str, session_id: Optional[str]
     log_path = _get_log_path()
     with log_path.open("a", encoding="utf-8") as f:
         f.write(f"[{timestamp}] session={sid}\n")
+        if system_prompt:
+            f.write("SYSTEM PROMPT:\n")
+            f.write(f"{system_prompt}\n\n")
         f.write("PROMPT:\n")
         f.write(f"{prompt}\n\n")
         f.write("RESPONSE:\n")
