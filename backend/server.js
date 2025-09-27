@@ -402,6 +402,46 @@ app.get("/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
+// List sessions (latest first)
+app.get("/sessions", async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const sessions = await SessionModel.find({}, {
+      _id: 0,
+      sessionId: 1,
+      userId: 1,
+      language: 1,
+      startTime: 1,
+      endTime: 1,
+      createdAt: 1,
+      updatedAt: 1
+    }).sort({ updatedAt: -1 }).limit(limit).lean();
+
+    return res.json({ ok: true, sessions });
+  } catch (e) {
+    console.error("/sessions error:", e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// Cleanup sessions with empty events
+app.post("/sessions/cleanup-empty", async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    const result = await SessionModel.deleteMany({ $or: [ { events: { $size: 0 } }, { events: { $exists: false } } ] });
+    return res.json({ ok: true, deletedCount: result?.deletedCount || 0 });
+  } catch (e) {
+    console.error("/sessions/cleanup-empty error:", e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

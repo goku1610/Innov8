@@ -63,19 +63,48 @@ function App() {
   const [replayEvents, setReplayEvents] = useState<any[]>([]);
   const [replaySession, setReplaySession] = useState<any>(null);
   const [currentReplayEvent, setCurrentReplayEvent] = useState<any>(null);
+  const [isReplayCompleted, setIsReplayCompleted] = useState<boolean>(false);
+  const [availableSessions, setAvailableSessions] = useState<any[]>([]);
+  const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState<boolean>(false);
   const editorRef = useRef<any>(null);
   const pollRef = useRef<boolean>(false);
   const pollTimeoutRef = useRef<number | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const sessionStartTimeRef = useRef<number | null>(null);
+  const isRecordingEnabledRef = useRef<boolean>(true);
   const pendingEventsRef = useRef<any[]>([]);
   const lastFlushRef = useRef<number>(0);
+  const lastInputTimeRef = useRef<number>(0);
+  const idleFlushTimerRef = useRef<number | null>(null);
   const lastCodeRef = useRef<string>('');
   const wordBufferRef = useRef<string>('');
   const lineBufferRef = useRef<string>('');
   const lastWordTimeRef = useRef<number>(0);
   const lastLineTimeRef = useRef<number>(0);
   const isReplayingRef = useRef<boolean>(false);
+  const replayTimeoutRef = useRef<number | null>(null);
+  const currentReplayIndexRef = useRef<number>(0);
+  const replaySortedRef = useRef<any[]>([]);
+
+  // Force-flush any queued events to the backend immediately
+  const flushPendingEvents = useCallback(async () => {
+    try {
+      const currentSessionId = sessionIdRef.current;
+      if (!currentSessionId) return;
+      if (!pendingEventsRef.current.length) return;
+      const toSend = pendingEventsRef.current.splice(0, pendingEventsRef.current.length);
+      lastFlushRef.current = Date.now();
+      await axios.post('http://localhost:3000/session/event', {
+        sessionId: currentSessionId,
+        events: toSend
+      }).catch(() => {
+        // If still same session, re-queue; otherwise drop to avoid cross-session mix
+        if (sessionIdRef.current === currentSessionId) {
+          pendingEventsRef.current.unshift(...toSend);
+        }
+      });
+    } catch (_) {}
+  }, []);
 
   // Semantic event detection functions
   const detectWordComplete = (currentCode: string, timestamp: number) => {
@@ -145,19 +174,36 @@ function App() {
       const response = await axios.get(`http://localhost:3000/session/${sessionId}`);
       const sessionData = response.data;
       
+      const eventsArr = Array.isArray(sessionData.events) ? sessionData.events : [];
+      // Precompute a stable-sorted events list
+      replaySortedRef.current = eventsArr
+        .map((evt: any, idx: number) => ({ evt, idx }))
+        .sort((a: any, b: any) => {
+          const dt = (a.evt?.timestamp || 0) - (b.evt?.timestamp || 0);
+          if (dt !== 0) return dt;
+          return a.idx - b.idx;
+        })
+        .map((x: any) => x.evt);
+
       setReplaySession(sessionData);
-      setReplayEvents(sessionData.events || []);
+      setReplayEvents(eventsArr);
       setIsReplaying(true);
       isReplayingRef.current = true;
       setReplayProgress(0);
+      setIsReplayCompleted(false);
+      currentReplayIndexRef.current = 0;
+      if (replayTimeoutRef.current !== null) {
+        clearTimeout(replayTimeoutRef.current);
+        replayTimeoutRef.current = null;
+      }
       
       // Start with initial code
       setCode(sessionData.initialCode);
       setSelectedLanguage(sessionData.language);
       
       // Start replay after a short delay
-      setTimeout(() => {
-        replayCompleteSession(sessionData.events || []);
+      replayTimeoutRef.current = window.setTimeout(() => {
+        replayCompleteSession(replaySortedRef.current || eventsArr, 0);
       }, 1000);
       
     } catch (error) {
@@ -165,13 +211,17 @@ function App() {
     }
   };
 
-  const replayCompleteSession = (events: any[]) => {
+  const replayCompleteSession = (events: any[], startIndex: number = 0) => {
     if (!events.length) return;
     
     // Sort events by timestamp to ensure chronological order
-    const sortedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
+    const sortedEvents = replaySortedRef.current?.length ? replaySortedRef.current : events;
     
-    let currentIndex = 0;
+    // Constant-speed typing configuration
+    const FIXED_STEP_MS = 60; // constant per-event delay for normal flow
+    const LONG_BREAK_THRESHOLD_MS = 800; // preserve long user pauses beyond this
+    
+    let currentIndex = Math.max(0, Math.min(startIndex, sortedEvents.length));
     const totalEvents = sortedEvents.length;
     
     const replayNextEvent = () => {
@@ -179,6 +229,14 @@ function App() {
         setIsReplaying(false);
         isReplayingRef.current = false;
         console.log('Replay completed');
+        setCurrentReplayEvent(null);
+        setReplayProgress(100);
+        setIsReplayCompleted(true);
+        currentReplayIndexRef.current = totalEvents;
+        if (replayTimeoutRef.current !== null) {
+          clearTimeout(replayTimeoutRef.current);
+          replayTimeoutRef.current = null;
+        }
         return;
       }
       
@@ -194,15 +252,27 @@ function App() {
       // Apply the edit to the editor
       applyReplayEdit(event);
       
-      // Calculate delay to next event (preserve original timing)
-      const delay = nextEvent ? (nextEvent.timestamp - event.timestamp) / replaySpeed : 0;
+      // Calculate delay to next event
+      // Use constant per-event delay except when original gap indicates a long break
+      let delay = 0;
+      if (nextEvent) {
+        const originalGap = nextEvent.timestamp - event.timestamp;
+        if (originalGap >= LONG_BREAK_THRESHOLD_MS) {
+          // Preserve long pause timing but allow speed multiplier
+          delay = Math.max(20, originalGap / replaySpeed);
+        } else {
+          // Constant-speed typing
+          delay = Math.max(20, FIXED_STEP_MS / replaySpeed);
+        }
+      }
       
       currentIndex++;
+      currentReplayIndexRef.current = currentIndex;
       setReplayProgress((currentIndex / totalEvents) * 100);
       
       if (isReplayingRef.current) {
         // Use original timing but with speed control
-        setTimeout(replayNextEvent, Math.max(20, delay)); // Minimum 20ms delay
+        replayTimeoutRef.current = window.setTimeout(replayNextEvent, delay); // delay already accounts for min
       }
     };
     
@@ -210,63 +280,77 @@ function App() {
   };
 
   const applyReplayEdit = (event: any) => {
-    const editor = editorRef.current;
-    if (!editor) {
-      console.log('No editor ref available');
+    try {
+      const editor = editorRef.current;
+      if (!editor) {
+        console.log('No editor ref available');
+      }
+
+      const model = editor?.getModel();
+      if (!model) {
+        console.log('No model available');
+        return;
+      }
+
+      // Only process EDIT events for Monaco replay
+      if (event.type !== 'EDIT') {
+        console.log(`Skipping non-EDIT event: ${event.type}`);
+        return;
+      }
+
+      console.log('Applying edit:', event.payload.changes);
+
+      // Apply each change individually to simulate real typing
+      event.payload.changes.forEach((change: any) => {
+        const range = {
+          startLineNumber: change.range.startLineNumber,
+          startColumn: change.range.startColumn,
+          endLineNumber: change.range.endLineNumber,
+          endColumn: change.range.endColumn
+        };
+
+        console.log('Applying change:', { range, text: change.text });
+
+        // Apply the edit
+        model.pushEditOperations([], [{
+          range,
+          text: change.text,
+          forceMoveMarkers: false
+        }], () => null);
+
+        // Update React state immediately
+        const newCode = model.getValue();
+        console.log('New code after edit:', newCode);
+        setCode(newCode);
+      });
+    } catch (err) {
+      console.error('Replay edit failed, continuing:', err);
+      // Swallow errors to prevent replay from pausing
     }
-    
-    const model = editor?.getModel();
-    if (!model) {
-      console.log('No model available');
-      return;
-    }
-    
-    // Only process EDIT events for Monaco replay
-    if (event.type !== 'EDIT') {
-      console.log(`Skipping non-EDIT event: ${event.type}`);
-      return;
-    }
-    
-    console.log('Applying edit:', event.payload.changes);
-    
-    // Apply each change individually to simulate real typing
-    event.payload.changes.forEach((change: any) => {
-      const range = {
-        startLineNumber: change.range.startLineNumber,
-        startColumn: change.range.startColumn,
-        endLineNumber: change.range.endLineNumber,
-        endColumn: change.range.endColumn
-      };
-      
-      console.log('Applying change:', { range, text: change.text });
-      
-      // Apply the edit
-      model.pushEditOperations([], [{
-        range,
-        text: change.text,
-        forceMoveMarkers: false
-      }], () => null);
-      
-      // Update React state immediately
-      const newCode = model.getValue();
-      console.log('New code after edit:', newCode);
-      setCode(newCode);
-    });
   };
 
   const pauseReplay = () => {
     setIsReplaying(false);
     isReplayingRef.current = false;
+    if (replayTimeoutRef.current !== null) {
+      clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
   };
 
   const resumeReplay = () => {
     if (replayEvents.length > 0) {
       setIsReplaying(true);
       isReplayingRef.current = true;
-      // Continue from current progress
-      const startIndex = Math.floor((replayProgress / 100) * replayEvents.length);
-      const remainingEvents = replayEvents.slice(startIndex);
-      replayCompleteSession(remainingEvents);
+      setIsReplayCompleted(false);
+      // Continue from precise saved index
+      const startIndex = Math.max(0, Math.min(currentReplayIndexRef.current, replayEvents.length));
+      if (replayTimeoutRef.current !== null) {
+        clearTimeout(replayTimeoutRef.current);
+        replayTimeoutRef.current = null;
+      }
+      const sorted = replaySortedRef.current?.length ? replaySortedRef.current : replayEvents;
+      replayCompleteSession(sorted, startIndex);
     }
   };
 
@@ -276,10 +360,99 @@ function App() {
     setReplayProgress(0);
     setReplayEvents([]);
     setReplaySession(null);
+    setCurrentReplayEvent(null);
+    currentReplayIndexRef.current = 0;
+    setIsReplayCompleted(false);
+    if (replayTimeoutRef.current !== null) {
+      clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
   };
 
   const changeReplaySpeed = (speed: number) => {
     setReplaySpeed(speed);
+  };
+
+  const seekReplayToPercent = (percent: number) => {
+    const clamped = Math.max(0, Math.min(100, percent));
+    setReplayProgress(clamped);
+    const sorted = replaySortedRef.current?.length ? replaySortedRef.current : replayEvents;
+    if (!sorted.length || !replaySession) return;
+    const startIndex = Math.floor((clamped / 100) * sorted.length);
+
+    // Auto-pause immediately
+    if (replayTimeoutRef.current !== null) {
+      clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
+    setIsReplaying(false);
+    isReplayingRef.current = false;
+    setIsReplayCompleted(false);
+
+    // Render editor to the selected point deterministically
+    const editor = editorRef.current;
+    const model = editor?.getModel?.();
+    if (!editor || !model) return;
+
+    // Prevent recording during programmatic rebuild
+    const prevReplayFlag = isReplayingRef.current;
+    isReplayingRef.current = true;
+
+    try {
+      // Reset to initial state
+      if (replaySession.language && replaySession.language !== selectedLanguage) {
+        setSelectedLanguage(replaySession.language);
+      }
+      setCode(replaySession.initialCode || '');
+      model.setValue(replaySession.initialCode || '');
+
+      // Apply events up to startIndex
+      for (let i = 0; i < startIndex; i++) {
+        const ev = sorted[i];
+        if (ev?.type === 'EDIT') {
+          // Inline minimal apply to avoid extra logging
+          (ev.payload?.changes || []).forEach((change: any) => {
+            const range = {
+              startLineNumber: change.range.startLineNumber,
+              startColumn: change.range.startColumn,
+              endLineNumber: change.range.endLineNumber,
+              endColumn: change.range.endColumn
+            };
+            model.pushEditOperations([], [{ range, text: change.text, forceMoveMarkers: false }], () => null);
+          });
+        }
+      }
+
+      // Sync React state to final code at the index
+      setCode(model.getValue());
+      currentReplayIndexRef.current = startIndex;
+      setCurrentReplayEvent(sorted[startIndex] || null);
+    } finally {
+      // Restore flag
+      isReplayingRef.current = prevReplayFlag;
+    }
+  };
+
+  const rerunReplay = () => {
+    if (!replaySession) return;
+    const sorted = replaySortedRef.current?.length ? replaySortedRef.current : replayEvents;
+    if (!sorted.length) return;
+    const editor = editorRef.current;
+    const model = editor?.getModel?.();
+    if (model) {
+      model.setValue(replaySession.initialCode || '');
+    }
+    setCode(replaySession.initialCode || '');
+    setReplayProgress(0);
+    currentReplayIndexRef.current = 0;
+    setIsReplayCompleted(false);
+    setIsReplaying(true);
+    isReplayingRef.current = true;
+    if (replayTimeoutRef.current !== null) {
+      clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
+    replayCompleteSession(sorted, 0);
   };
 
   // --- Three-pane resizable layout state ---
@@ -374,6 +547,8 @@ function App() {
 
   // Centralized syntax check that applies Monaco markers and updates sidebar state
   const performSyntaxCheck = useCallback(async () => {
+    // Give absolute priority to replay: skip checks while replaying
+    if (isReplayingRef.current) return;
     const current = editorRef.current;
     if (!current) return;
     const monacoModel = current.getModel?.();
@@ -466,16 +641,79 @@ function App() {
     }
   }, [code, selectedLanguage]);
 
-  const handleLanguageChange = (newLanguage: string) => {
+  const handleLanguageChange = async (newLanguage: string) => {
+    // Pause recording while switching languages
+    isRecordingEnabledRef.current = false;
+
+    // Stop any active replay immediately
+    if (isReplayingRef.current) {
+      setIsReplaying(false);
+      isReplayingRef.current = false;
+      setReplayProgress(0);
+      setReplayEvents([]);
+      setReplaySession(null);
+    }
+
+    // End current recording session if exists (flush first to avoid dropped tail keystrokes)
+    const previousSessionId = sessionIdRef.current;
+    if (previousSessionId) {
+      try {
+        await flushPendingEvents();
+        await axios.post('http://localhost:3000/session/stop', { sessionId: previousSessionId });
+      } catch (_) {}
+    }
+
+    // Determine fresh initial code for the new language
+    const newInitialCode = DEFAULT_CODE[newLanguage as keyof typeof DEFAULT_CODE] || '';
+
+    // Update language and reset editor to language default (synchronously in Monaco too)
     setSelectedLanguage(newLanguage);
-    setCode(DEFAULT_CODE[newLanguage as keyof typeof DEFAULT_CODE] || '');
+    setCode(newInitialCode);
+    try {
+      const model = editorRef.current?.getModel?.();
+      if (model) {
+        model.setValue(newInitialCode);
+      }
+    } catch (_) {}
     setResult(null);
     setSyntaxErrors([]);
     setHasSyntaxErrors(false);
+
+    // Start a fresh session with a new ID for the new language
+    try {
+      const resp = await axios.post('http://localhost:3000/session/start', {
+        language: newLanguage,
+        initialCode: newInitialCode,
+        meta: { userAgent: navigator.userAgent }
+      });
+      sessionIdRef.current = resp.data?.sessionId || null;
+      sessionStartTimeRef.current = resp.data?.startTime || Date.now();
+    } catch (_) {
+      sessionIdRef.current = null;
+      sessionStartTimeRef.current = Date.now();
+    }
+
+    // Clear any pending events from old session
+    pendingEventsRef.current = [];
+    lastFlushRef.current = 0;
+    lastCodeRef.current = '';
+    wordBufferRef.current = '';
+    lineBufferRef.current = '';
+    lastWordTimeRef.current = 0;
+    lastLineTimeRef.current = 0;
+
+    // Re-enable recording
+    isRecordingEnabledRef.current = true;
   };
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
+    // Flush pending events when editor loses focus
+    try {
+      editor.onDidBlurEditorText(() => {
+        flushPendingEvents();
+      });
+    } catch (_) {}
     // Start a new recording session
     (async () => {
       try {
@@ -618,6 +856,10 @@ function App() {
         if (isReplayingRef.current) {
           return;
         }
+        // If recording is temporarily disabled (e.g., during language switch), skip
+        if (!isRecordingEnabledRef.current) {
+          return;
+        }
         // Debounce the marker updates
         setTimeout(updateMarkers, 500);
         
@@ -645,6 +887,23 @@ function App() {
           }
         };
         pendingEventsRef.current.push(keystrokeEvent);
+        lastInputTimeRef.current = now;
+        // Idle-based flush: if no further input within 200ms, flush
+        if (idleFlushTimerRef.current !== null) {
+          clearTimeout(idleFlushTimerRef.current);
+        }
+        idleFlushTimerRef.current = window.setTimeout(() => {
+          // Only flush if still idle and same session exists
+          const idleFor = Date.now() - lastInputTimeRef.current;
+          if (idleFor >= 200) {
+            flushPendingEvents();
+          }
+        }, 220);
+
+        // Size-based flush: if queue grows large, flush immediately
+        if (pendingEventsRef.current.length >= 25) {
+          flushPendingEvents();
+        }
         
         // Detect semantic events
         detectWordComplete(currentCode, now);
@@ -654,16 +913,20 @@ function App() {
         lastCodeRef.current = currentCode;
         
         // Throttle flush to backend (~500ms)
-        const shouldFlush = now - (lastFlushRef.current || 0) > 500;
+        const shouldFlush = now - (lastFlushRef.current || 0) > 350; // slightly faster to reduce drop risk
         if (shouldFlush && sessionIdRef.current && pendingEventsRef.current.length) {
+          // Bind the sessionId at the moment of flushing to avoid mixing after switches
+          const boundSessionId = sessionIdRef.current;
           const toSend = pendingEventsRef.current.splice(0, pendingEventsRef.current.length);
           lastFlushRef.current = now;
           axios.post('http://localhost:3000/session/event', {
-            sessionId: sessionIdRef.current,
+            sessionId: boundSessionId,
             events: toSend
           }).catch(() => {
-            // On failure, re-queue toSend
-            pendingEventsRef.current.unshift(...toSend);
+            // On failure, only re-queue if we're still on the same session
+            if (sessionIdRef.current === boundSessionId) {
+              pendingEventsRef.current.unshift(...toSend);
+            }
           });
         }
       });
@@ -699,10 +962,27 @@ function App() {
 
   // Stop session on unmount
   useEffect(() => {
+    const handleBeforeUnload = async () => {
+      // Best-effort flush of last events
+      try { await flushPendingEvents(); } catch(_) {}
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    const handleVisibility = async () => {
+      try { await flushPendingEvents(); } catch(_) {}
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleVisibility);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pagehide', handleVisibility);
       const sid = sessionIdRef.current;
       if (sid) {
-        axios.post('http://localhost:3000/session/stop', { sessionId: sid }).catch(() => {});
+        // Flush pending events before stopping the session
+        flushPendingEvents().finally(() => {
+          axios.post('http://localhost:3000/session/stop', { sessionId: sid }).catch(() => {});
+        });
       }
     };
   }, []);
@@ -714,6 +994,8 @@ function App() {
       // Small debounce
       await new Promise(r => setTimeout(r, 350));
       if (cancelled) return;
+      // Skip any background work during replay
+      if (isReplayingRef.current) return;
       await performSyntaxCheck();
     };
 
@@ -723,10 +1005,21 @@ function App() {
 
   // When an error is present, keep re-checking every 350ms until resolved
   useEffect(() => {
+    // Replay has highest priority: disable polling entirely during replay
+    if (isReplayingRef.current) {
+      pollRef.current = false;
+      if (pollTimeoutRef.current !== null) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+      return;
+    }
+
     if (hasSyntaxErrors) {
       pollRef.current = true;
       const loop = async () => {
         if (!pollRef.current) return;
+        if (isReplayingRef.current) return;
         await performSyntaxCheck();
         if (pollRef.current) {
           pollTimeoutRef.current = window.setTimeout(loop, 350);
@@ -920,19 +1213,59 @@ function App() {
           </div>
           <div className="session-selector">
             <label htmlFor="session">Replay Session:</label>
-            <input 
-              id="session"
-              type="text" 
-              placeholder="Enter session ID"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  const sessionId = e.currentTarget.value.trim();
-                  if (sessionId) {
-                    startReplay(sessionId);
+            <div className="session-dropdown">
+              <input 
+                id="session"
+                type="text" 
+                placeholder="Enter session ID"
+                autoComplete="off"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    const sessionId = e.currentTarget.value.trim();
+                    if (sessionId) {
+                      startReplay(sessionId);
+                    }
                   }
-                }
-              }}
-            />
+                }}
+                onFocus={async () => {
+                  try {
+                    setIsSessionDropdownOpen(true);
+                    // Cleanup empty sessions first
+                    try { await axios.post('http://localhost:3000/sessions/cleanup-empty'); } catch (_) {}
+                    const resp = await axios.get('http://localhost:3000/sessions?limit=100');
+                    const list = Array.isArray(resp.data?.sessions) ? resp.data.sessions : [];
+                    setAvailableSessions(list);
+                  } catch (_) {
+                    setAvailableSessions([]);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay close to allow click on item
+                  setTimeout(() => setIsSessionDropdownOpen(false), 150);
+                }}
+              />
+              {isSessionDropdownOpen && availableSessions.length > 0 && (
+                <div className="session-dropdown-menu">
+                  {availableSessions.map((s) => (
+                    <div
+                      key={s.sessionId}
+                      className="session-dropdown-item"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        const input = document.getElementById('session') as HTMLInputElement;
+                        if (input) input.value = s.sessionId;
+                        startReplay(s.sessionId);
+                        setIsSessionDropdownOpen(false);
+                      }}
+                      title={`${s.sessionId} • ${s.language || ''}`}
+                    >
+                      <span className="session-id">{s.sessionId.slice(0,8)}...</span>
+                      <span className="session-meta">{s.language || ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <button 
               onClick={() => {
                 const input = document.getElementById('session') as HTMLInputElement;
@@ -1004,30 +1337,54 @@ function App() {
             <div className="editor-header">
               <div className="editor-title">
                 <h3>Code Editor</h3>
-                {isReplaying && replaySession && (
+                {isReplaying && (
                   <div className="replay-info">
                     <span className="replay-indicator">🔴 REPLAYING</span>
-                    <span className="session-info">
-                      Session: {replaySession.sessionId?.substring(0, 8)}... | 
-                      Language: {replaySession.language} | 
-                      Events: {replayEvents.length}
-                    </span>
-                    {currentReplayEvent && (
-                      <div className="current-event">
-                        <span className="event-type">{currentReplayEvent.type}</span>
-                        <span className="event-time">+{currentReplayEvent.timestamp}ms</span>
-                        {currentReplayEvent.type === 'EDIT' && currentReplayEvent.payload.changes[0] && (
-                          <span className="event-text">
-                            "{currentReplayEvent.payload.changes[0].text}"
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
               <div className="button-group">
-                {!isReplaying ? (
+                {(replaySession && replayEvents.length > 0) ? (
+                  <div className="replay-controls">
+                    {!isReplayCompleted ? (
+                      <>
+                        <button 
+                          className="replay-button"
+                          onClick={isReplaying ? pauseReplay : resumeReplay}
+                        >
+                          {isReplaying ? 'Pause' : 'Resume'}
+                        </button>
+                        <button 
+                          className="replay-button"
+                          onClick={stopReplay}
+                        >
+                          Stop
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="replay-completed">Replay completed</span>
+                        <button 
+                          className="replay-button"
+                          onClick={rerunReplay}
+                        >
+                          Rerun
+                        </button>
+                      </>
+                    )}
+                    <div className="replay-progress">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={replayProgress}
+                        onChange={(e) => seekReplayToPercent(parseInt(e.target.value, 10))}
+                      />
+                      <span>{Math.round(replayProgress)}%</span>
+                    </div>
+                  </div>
+                ) : (
                   <button 
                     className={`run-button ${hasSyntaxErrors ? 'has-errors' : ''}`}
                     onClick={runCode} 
@@ -1035,42 +1392,6 @@ function App() {
                   >
                     {isRunning ? 'Running...' : 'Run Code'}
                   </button>
-                ) : (
-                  <div className="replay-controls">
-                    <button 
-                      className="replay-button"
-                      onClick={isReplaying ? pauseReplay : resumeReplay}
-                    >
-                      {isReplaying ? 'Pause' : 'Resume'}
-                    </button>
-                    <button 
-                      className="replay-button"
-                      onClick={stopReplay}
-                    >
-                      Stop
-                    </button>
-                    <div className="replay-speed">
-                      <label>Speed:</label>
-                      <select 
-                        value={replaySpeed} 
-                        onChange={(e) => changeReplaySpeed(parseFloat(e.target.value))}
-                      >
-                        <option value={0.5}>0.5x</option>
-                        <option value={1}>1x</option>
-                        <option value={2}>2x</option>
-                        <option value={4}>4x</option>
-                      </select>
-                    </div>
-                    <div className="replay-progress">
-                      <div className="progress-bar">
-                        <div 
-                          className="progress-fill" 
-                          style={{ width: `${replayProgress}%` }}
-                        ></div>
-                      </div>
-                      <span>{Math.round(replayProgress)}%</span>
-                    </div>
-                  </div>
                 )}
               </div>
             </div>
@@ -1079,10 +1400,15 @@ function App() {
                 height="100%"
                 language={LANGUAGES.find(lang => lang.value === selectedLanguage)?.monacoLang}
                 value={code}
-                onChange={(value) => setCode(value || '')}
+                onChange={(value) => {
+                  // Do not allow user edits during replay
+                  if (isReplayingRef.current) return;
+                  setCode(value || '');
+                }}
                 onMount={handleEditorDidMount}
                 theme="vs-dark"
                 options={{
+                  readOnly: isReplaying,
                   minimap: { enabled: false },
                   fontSize: 14,
                   lineNumbers: 'on',

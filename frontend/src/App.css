@@ -38,6 +38,48 @@
   gap: 0.5rem;
 }
 
+.session-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.session-dropdown-menu {
+  position: absolute;
+  z-index: 20;
+  top: 110%;
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  background-color: #2d2d30;
+  border: 1px solid #3e3e42;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+
+.session-dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  color: #d4d4d4;
+}
+
+.session-dropdown-item:hover {
+  background-color: #3c3c3c;
+}
+
+.session-dropdown-item .session-id {
+  font-family: monospace;
+  color: #cccccc;
+}
+
+.session-dropdown-item .session-meta {
+  color: #7aa2f7;
+  font-size: 0.8rem;
+}
+
 .session-selector label {
   color: #cccccc;
   font-weight: 500;
