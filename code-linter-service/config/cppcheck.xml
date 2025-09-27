@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<cppcheck-cfg>
+    <!-- Configuration for cppcheck static analysis -->
+    
+    <!-- Enable all checks -->
+    <enable>all</enable>
+    
+    <!-- Severity levels to report -->
+    <severity>error,warning,style,performance,portability,information</severity>
+    
+    <!-- Platform specific settings -->
+    <platform>native</platform>
+    
+    <!-- Standard to use for C code -->
+    <std>c11</std>
+    
+    <!-- Suppress specific warnings -->
+    <suppress>
+        <id>missingIncludeSystem</id>
+        <fileName>*</fileName>
+    </suppress>
+    
+    <!-- Include paths -->
+    <includes>
+        <include>/usr/include</include>
+        <include>/usr/local/include</include>
+    </includes>
+    
+    <!-- Force checking even without explicit main() -->
+    <force>true</force>
+    
+    <!-- Maximum number of configurations to check -->
+    <max-configs>12</max-configs>
+    
+    <!-- Check headers -->
+    <check-headers>true</check-headers>
+    
+    <!-- Library configuration -->
+    <libraries>
+        <library>std</library>
+        <library>posix</library>
+    </libraries>
+</cppcheck-cfg>
