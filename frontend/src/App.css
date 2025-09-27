@@ -93,13 +93,75 @@
   border-color: #007acc;
 }
 
-.main-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  padding: 1rem;
+.three-pane-container {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  width: 100%;
   height: calc(100vh - 80px);
+  padding: 1rem;
+  gap: 0;
+  box-sizing: border-box;
 }
+
+.pane {
+  height: 100%;
+  background-color: #2d2d30;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pane-header {
+  background-color: #3c3c3c;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #5a5a5a;
+  font-weight: 600;
+}
+
+.pane-content {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.question-content h3 { margin: 0 0 0.5rem 0; }
+.question-content p { margin: 0.5rem 0; line-height: 1.4; }
+
+.gutter-vertical {
+  width: 6px;
+  cursor: col-resize;
+  background: #1f1f1f;
+  margin: 0 6px;
+  border-radius: 3px;
+}
+
+.gutter-vertical:hover { background: #2a2a2a; }
+
+.pane-middle {
+  display: flex;
+  flex-direction: column;
+}
+
+.middle-top, .middle-bottom {
+  width: 100%;
+  background-color: #2d2d30;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gutter-horizontal {
+  height: 8px;
+  cursor: row-resize;
+  background: #1f1f1f;
+  margin: 6px 0;
+  border-radius: 4px;
+}
+
+.gutter-horizontal:hover { background: #2a2a2a; }
 
 .editor-section, .output-section {
   display: flex;
@@ -107,6 +169,46 @@
   background-color: #2d2d30;
   border-radius: 8px;
   overflow: hidden;
+}
+
+/* Chat styles */
+.chat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chat-message {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  max-width: 90%;
+}
+
+.chat-message.bot { background-color: #2a2a2a; align-self: flex-start; }
+.chat-message.user { background-color: #004b7c; align-self: flex-end; }
+
+.chat-input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.chat-input {
+  flex: 1;
+  background-color: #3c3c3c;
+  color: #d4d4d4;
+  border: 1px solid #5a5a5a;
+  border-radius: 4px;
+  padding: 0.5rem;
+}
+
+.chat-send {
+  background-color: #007acc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
 }
 
 .editor-header, .output-header {
