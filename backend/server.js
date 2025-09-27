@@ -47,6 +47,75 @@ const fileMap = {
   }
 };
 
+// Build compile-only/syntax-only check command per language
+function getCheckCommand(language, f) {
+  const dir = path.dirname(f);
+  const base = path.basename(f);
+  switch (language) {
+    case 'python':
+      return `docker run --rm --cpus=0.5 --memory=256m --network=none -v "${dir}:/work" python:3.9-custom sh -c "python3 -m py_compile /work/${base}"`;
+    case 'javascript':
+      return `docker run --rm --cpus=0.5 --memory=256m --network=none -v "${dir}:/work" node:18-custom node --check /work/${base}`;
+    case 'java':
+      return `docker run --rm --cpus=0.5 --memory=256m --network=none -v "${dir}:/work" openjdk:11-custom sh -c "cd /work && javac Main.java"`;
+    case 'c':
+      return `docker run --rm --cpus=0.5 --memory=256m --network=none -v "${dir}:/work" gcc:latest-custom sh -c "cd /work && gcc -fsyntax-only ${base}"`;
+    case 'cpp':
+      return `docker run --rm --cpus=0.5 --memory=256m --network=none -v "${dir}:/work" gcc:latest-custom sh -c "cd /work && g++ -fsyntax-only ${base}"`;
+    default:
+      return '';
+  }
+}
+
+// Syntax/compile-only check endpoint
+app.post("/check", async (req, res) => {
+  try {
+    const { language, code } = req.body;
+
+    if (!language || !code) {
+      return res.status(400).json({ error: "Language and code are required" });
+    }
+
+    if (!fileMap[language]) {
+      return res.status(400).json({ error: "Unsupported language" });
+    }
+
+    const id = uuid();
+    let fileName;
+
+    if (language === 'java') {
+      fileName = path.join(tmpDir, 'Main.java');
+    } else {
+      fileName = path.join(tmpDir, `${language}-${id}${fileMap[language].ext}`);
+    }
+
+    try {
+      fs.writeFileSync(fileName, code);
+
+      const command = getCheckCommand(language, fileName);
+
+      exec(command, {
+        timeout: fileMap[language].timeout,
+        maxBuffer: 1024 * 1024
+      }, (err, stdout, stderr) => {
+        try {
+          if (fs.existsSync(fileName)) {
+            fs.unlinkSync(fileName);
+          }
+        } catch (_) {}
+
+        const ok = !err;
+        return res.json({ ok, stdout: stdout || "", stderr: stderr || "" });
+      });
+    } catch (writeErr) {
+      res.status(500).json({ error: "Failed to write code to file: " + writeErr.message });
+    }
+  } catch (error) {
+    console.error("Check error:", error);
+    res.status(500).json({ error: "Internal server error: " + error.message });
+  }
+});
+
 app.post("/run", async (req, res) => {
   try {
     const { language, code } = req.body;

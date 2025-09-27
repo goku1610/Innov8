@@ -228,20 +228,123 @@ function App() {
     setupSyntaxChecking();
   };
 
+  // Debounced server-side compile/syntax checks and Monaco markers
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const current = editorRef.current;
+      if (!current) return;
+      const monacoModel = current.getModel?.();
+      if (!monacoModel) return;
+      if (!code.trim()) {
+        // Clear markers and state
+        // @ts-ignore
+        const monacoAny = (window as any).monaco;
+        if (monacoAny) {
+          monacoAny.editor.setModelMarkers(monacoModel, 'owner', []);
+        }
+        setSyntaxErrors([]);
+        setHasSyntaxErrors(false);
+        return;
+      }
+
+      // Small debounce
+      await new Promise(r => setTimeout(r, 350));
+      if (cancelled) return;
+
+      try {
+        const resp = await axios.post('http://localhost:3000/check', {
+          language: selectedLanguage,
+          code
+        });
+        if (cancelled) return;
+
+        const stderr: string = resp.data?.stderr || '';
+
+        // Parse stderr into Monaco markers (best-effort, per language)
+        const markers: any[] = [];
+        const addMarker = (line: number, column: number, message: string) => {
+          markers.push({
+            startLineNumber: Math.max(1, line),
+            startColumn: Math.max(1, column),
+            endLineNumber: Math.max(1, line),
+            endColumn: Math.max(1, column + 1),
+            message,
+            severity: 8 // monaco.MarkerSeverity.Error
+          });
+        };
+
+        if (stderr) {
+          if (selectedLanguage === 'javascript') {
+            // Node --check error format example: /work/file.js:3
+            const re = /:(\d+)(?::(\d+))?/g;
+            let m;
+            while ((m = re.exec(stderr)) !== null) {
+              const line = parseInt(m[1] || '1', 10);
+              const col = parseInt(m[2] || '1', 10);
+              addMarker(line, col || 1, stderr.trim());
+            }
+          } else if (selectedLanguage === 'python') {
+            // py_compile traceback lines typically: File "...", line 3
+            const re = /line\s+(\d+)/g;
+            let m;
+            while ((m = re.exec(stderr)) !== null) {
+              const line = parseInt(m[1] || '1', 10);
+              addMarker(line, 1, stderr.trim());
+            }
+          } else if (selectedLanguage === 'c' || selectedLanguage === 'cpp') {
+            // gcc/g++: file.c:12:5: error: ...
+            const re = /:(\d+):(\d+):\s+error:/g;
+            let m;
+            while ((m = re.exec(stderr)) !== null) {
+              const line = parseInt(m[1] || '1', 10);
+              const col = parseInt(m[2] || '1', 10);
+              addMarker(line, col, stderr.trim());
+            }
+          } else if (selectedLanguage === 'java') {
+            // javac: Main.java:6: error: ...
+            const re = /:(\d+):\s+error:/g;
+            let m;
+            while ((m = re.exec(stderr)) !== null) {
+              const line = parseInt(m[1] || '1', 10);
+              addMarker(line, 1, stderr.trim());
+            }
+          }
+        }
+
+        // Apply markers to Monaco
+        // @ts-ignore
+        const monacoAny = (window as any).monaco;
+        if (monacoAny) {
+          monacoAny.editor.setModelMarkers(monacoModel, 'owner', markers);
+        }
+
+        // Mirror in our sidebar list
+        const sidebarErrors: SyntaxError[] = markers.map((mk) => ({
+          line: mk.startLineNumber,
+          column: mk.startColumn,
+          message: stderr || 'Compilation error',
+          severity: 'error'
+        }));
+        setSyntaxErrors(sidebarErrors);
+        setHasSyntaxErrors(sidebarErrors.length > 0);
+      } catch (e) {
+        // Network or other failures: do not block editing
+      }
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [code, selectedLanguage]);
+
   const runCode = async () => {
     if (!code.trim()) {
       setResult({ output: '', error: 'Please enter some code to run.' });
       return;
     }
 
-    // Check for syntax errors before execution
-    if (hasSyntaxErrors) {
-      setResult({ 
-        output: '', 
-        error: 'Please fix syntax errors before running the code.' 
-      });
-      return;
-    }
+    // Allow running code even with syntax errors
+    // The red underlines and error indicators will still be visible
 
     setIsRunning(true);
     setResult(null);
@@ -400,11 +503,11 @@ function App() {
           <div className="editor-header">
             <h3>Code Editor</h3>
             <button 
-              className={`run-button ${hasSyntaxErrors ? 'disabled' : ''}`}
+              className={`run-button ${hasSyntaxErrors ? 'has-errors' : ''}`}
               onClick={runCode} 
-              disabled={isRunning || hasSyntaxErrors}
+              disabled={isRunning}
             >
-              {isRunning ? 'Running...' : hasSyntaxErrors ? 'Fix Errors First' : 'Run Code'}
+              {isRunning ? 'Running...' : 'Run Code'}
             </button>
           </div>
           
