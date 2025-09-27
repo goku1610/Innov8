@@ -50,6 +50,135 @@ int main() {
 }`
 };
 
+interface ChatMessage {
+  id: string;
+  text: string;
+  sender: 'user' | 'bot';
+  timestamp: Date;
+}
+
+interface ChatBoxProps {}
+
+const ChatBox: React.FC<ChatBoxProps> = () => {
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      text: "Hi there! 👋 I'm your AI coding assistant. I can help you with the Two Sum problem and other coding concepts. What would you like to know?",
+      sender: 'bot',
+      timestamp: new Date()
+    }
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async () => {
+    if (!inputText.trim() || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      text: inputText.trim(),
+      sender: 'user',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    const currentInputText = inputText.trim();
+    setInputText('');
+    setIsLoading(true);
+
+    try {
+      const response = await axios.post('http://localhost:3000/chat', {
+        message: currentInputText
+      });
+
+      const botMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: response.data.response,
+        sender: 'bot',
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      console.error('Failed to get AI response:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I'm having trouble connecting to the AI service right now. Please try again later.",
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+
+  return (
+    <div className="chat-container">
+      <div className="chat-messages">
+        {messages.map((message) => (
+          <div key={message.id} className={`chat-message ${message.sender}`}>
+            <div className="message-content">
+              <div className="message-text">{message.text}</div>
+              <div className="message-time">
+                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="chat-message bot">
+            <div className="message-content">
+              <div className="message-text">
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+      <div className="chat-input-row">
+        <input
+          className="chat-input"
+          placeholder="Ask me anything about coding..."
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyPress={handleKeyPress}
+          disabled={isLoading}
+        />
+        <button
+          className="chat-send"
+          onClick={handleSendMessage}
+          disabled={!inputText.trim() || isLoading}
+        >
+          {isLoading ? '...' : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [selectedLanguage, setSelectedLanguage] = useState('python');
   const [code, setCode] = useState(DEFAULT_CODE.python);
@@ -58,11 +187,9 @@ function App() {
   const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
   const [hasSyntaxErrors, setHasSyntaxErrors] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
-  const [replaySpeed, setReplaySpeed] = useState(1);
   const [replayProgress, setReplayProgress] = useState(0);
   const [replayEvents, setReplayEvents] = useState<any[]>([]);
   const [replaySession, setReplaySession] = useState<any>(null);
-  const [currentReplayEvent, setCurrentReplayEvent] = useState<any>(null);
   const [isReplayCompleted, setIsReplayCompleted] = useState<boolean>(false);
   const [availableSessions, setAvailableSessions] = useState<any[]>([]);
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState<boolean>(false);
@@ -229,7 +356,6 @@ function App() {
         setIsReplaying(false);
         isReplayingRef.current = false;
         console.log('Replay completed');
-        setCurrentReplayEvent(null);
         setReplayProgress(100);
         setIsReplayCompleted(true);
         currentReplayIndexRef.current = totalEvents;
@@ -244,7 +370,6 @@ function App() {
       const nextEvent = sortedEvents[currentIndex + 1];
       
       // Show current event being replayed
-      setCurrentReplayEvent(event);
       
       // Debug logging
       console.log(`Replaying event ${currentIndex + 1}/${totalEvents}:`, event);
@@ -259,10 +384,10 @@ function App() {
         const originalGap = nextEvent.timestamp - event.timestamp;
         if (originalGap >= LONG_BREAK_THRESHOLD_MS) {
           // Preserve long pause timing but allow speed multiplier
-          delay = Math.max(20, originalGap / replaySpeed);
+          delay = Math.max(20, originalGap / 1);
         } else {
           // Constant-speed typing
-          delay = Math.max(20, FIXED_STEP_MS / replaySpeed);
+          delay = Math.max(20, FIXED_STEP_MS / 1);
         }
       }
       
@@ -360,7 +485,6 @@ function App() {
     setReplayProgress(0);
     setReplayEvents([]);
     setReplaySession(null);
-    setCurrentReplayEvent(null);
     currentReplayIndexRef.current = 0;
     setIsReplayCompleted(false);
     if (replayTimeoutRef.current !== null) {
@@ -369,9 +493,6 @@ function App() {
     }
   };
 
-  const changeReplaySpeed = (speed: number) => {
-    setReplaySpeed(speed);
-  };
 
   const seekReplayToPercent = (percent: number) => {
     const clamped = Math.max(0, Math.min(100, percent));
@@ -426,7 +547,6 @@ function App() {
       // Sync React state to final code at the index
       setCode(model.getValue());
       currentReplayIndexRef.current = startIndex;
-      setCurrentReplayEvent(sorted[startIndex] || null);
     } finally {
       // Restore flag
       isReplayingRef.current = prevReplayFlag;
@@ -985,7 +1105,7 @@ function App() {
         });
       }
     };
-  }, []);
+  }, [flushPendingEvents]);
 
   // Debounced server-side compile/syntax checks and Monaco markers
   useEffect(() => {
@@ -1521,17 +1641,11 @@ function App() {
         </div>
         <div className="gutter-vertical" onMouseDown={beginDragRight} />
 
-        {/* Right: Chatbot panel (sample) */}
+        {/* Right: Chatbot panel */}
         <div className="pane pane-right" style={{ width: `${rightWidthPct}%` }}>
           <div className="pane-header">AI Assistant</div>
           <div className="pane-content chat-content">
-            <div className="chat-message bot">Hello! I'm your coding assistant. Ask me anything about this problem.</div>
-            <div className="chat-message user">What's the time complexity of the optimal solution?</div>
-            <div className="chat-message bot">O(n) using a hash map to store seen values.</div>
-            <div className="chat-input-row">
-              <input className="chat-input" placeholder="Type a message..." />
-              <button className="chat-send">Send</button>
-            </div>
+            <ChatBox />
           </div>
         </div>
       </div>

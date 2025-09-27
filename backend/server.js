@@ -442,6 +442,47 @@ app.post("/sessions/cleanup-empty", async (req, res) => {
   }
 });
 
+// AI Chat functionality
+const getAIResponse = (userMessage) => {
+  const message = userMessage.toLowerCase();
+
+  // Default responses
+  const responses = [
+    "I can help you with Two Sum and general coding concepts! Ask me about time complexity, approaches, edge cases, or implementation details.",
+    "I'm here to assist with your coding questions. What specific aspect of the Two Sum problem would you like to explore?",
+    "Feel free to ask about algorithms, data structures, or any coding concepts you're working with!"
+  ];
+
+  return responses[Math.floor(Math.random() * responses.length)];
+};
+
+// Chat endpoint
+app.post("/chat", async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Simulate AI processing delay
+    await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200));
+
+    const response = getAIResponse(message);
+
+    return res.json({
+      response,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Chat error:", error);
+    res.status(500).json({
+      error: "Failed to process chat message",
+      response: "Sorry, I'm having trouble processing your message right now."
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
