@@ -1266,7 +1266,8 @@ function App() {
     try {
       const response = await axios.post('http://localhost:3000/run', {
         language: selectedLanguage,
-        code: code
+        code: code,
+        sessionId: sessionIdRef.current
       });
 
       setResult(response.data);

@@ -64,6 +64,16 @@ const sessionSchema = new mongoose.Schema({
     of: [lineVersionSchema],
     default: {}
   },
+  // Minimal addition: capture all submissions for a session
+  all_submissions: {
+    type: [{
+      code: { type: String },
+      output: { type: String },
+      error: { type: String },
+      timestamp: { type: Number, default: () => Date.now() }
+    }],
+    default: []
+  },
   meta: { type: mongoose.Schema.Types.Mixed }
 }, { timestamps: true });
 
@@ -326,7 +336,7 @@ app.post("/check", async (req, res) => {
 
 app.post("/run", async (req, res) => {
   try {
-    const { language, code } = req.body;
+    const { language, code, sessionId } = req.body;
     
     if (!language || !code) {
       return res.status(400).json({ error: "Language and code are required" });
@@ -354,7 +364,7 @@ app.post("/run", async (req, res) => {
     exec(command, { 
       timeout: fileMap[language].timeout,
       maxBuffer: 1024 * 1024 // 1MB buffer
-    }, (err, stdout, stderr) => {
+    }, async (err, stdout, stderr) => {
       // Clean up the temporary file
       try {
         if (fs.existsSync(runDir)) {
@@ -367,10 +377,20 @@ app.post("/run", async (req, res) => {
       if (err) {
         // Handle timeout and other execution errors
         if (err.code === 'TIMEOUT') {
-          return res.json({ 
+          const payload = { 
             output: "", 
             error: "⏰ Execution timed out. Your code took too long to run." 
-          });
+          };
+          // Save submission if sessionId provided
+          if (mongoConnected && sessionId) {
+            try {
+              await SessionModel.updateOne(
+                { sessionId },
+                { $push: { all_submissions: { code, output: payload.output, error: payload.error, timestamp: Date.now() } } }
+              );
+            } catch (_) {}
+          }
+          return res.json(payload);
         }
         
         // Enhanced error formatting
@@ -395,16 +415,36 @@ app.post("/run", async (req, res) => {
           errorMessage = `🔴 Java Runtime Error:\n${errorMessage}`;
         }
         
-        return res.json({ 
+        const payload = { 
           output: stdout || "", 
           error: errorMessage
-        });
+        };
+        // Save submission if sessionId provided
+        if (mongoConnected && sessionId) {
+          try {
+            await SessionModel.updateOne(
+              { sessionId },
+              { $push: { all_submissions: { code, output: payload.output, error: payload.error, timestamp: Date.now() } } }
+            );
+          } catch (_) {}
+        }
+        return res.json(payload);
       }
 
-      res.json({ 
+      const payload = { 
         output: stdout || "", 
         error: stderr || "" 
-      });
+      };
+      // Save submission if sessionId provided
+      if (mongoConnected && sessionId) {
+        try {
+          await SessionModel.updateOne(
+            { sessionId },
+            { $push: { all_submissions: { code, output: payload.output, error: payload.error, timestamp: Date.now() } } }
+          );
+        } catch (_) {}
+      }
+      res.json(payload);
     });
     
   } catch (writeErr) {
