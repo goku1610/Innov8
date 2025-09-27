@@ -94,13 +94,35 @@ app.post("/run", async (req, res) => {
         if (err.code === 'TIMEOUT') {
           return res.json({ 
             output: "", 
-            error: "Execution timed out. Your code took too long to run." 
+            error: "⏰ Execution timed out. Your code took too long to run." 
           });
+        }
+        
+        // Enhanced error formatting
+        let errorMessage = stderr || err.message || "Execution failed";
+        
+        // Format common error types
+        if (errorMessage.includes('SyntaxError')) {
+          errorMessage = `🔴 Syntax Error:\n${errorMessage}`;
+        } else if (errorMessage.includes('ReferenceError')) {
+          errorMessage = `🔴 Reference Error:\n${errorMessage}`;
+        } else if (errorMessage.includes('TypeError')) {
+          errorMessage = `🔴 Type Error:\n${errorMessage}`;
+        } else if (errorMessage.includes('NameError')) {
+          errorMessage = `🔴 Name Error:\n${errorMessage}`;
+        } else if (errorMessage.includes('IndentationError')) {
+          errorMessage = `🔴 Indentation Error:\n${errorMessage}`;
+        } else if (errorMessage.includes('error:') && language === 'c') {
+          errorMessage = `🔴 Compilation Error:\n${errorMessage}`;
+        } else if (errorMessage.includes('error:') && language === 'cpp') {
+          errorMessage = `🔴 Compilation Error:\n${errorMessage}`;
+        } else if (errorMessage.includes('Exception in thread')) {
+          errorMessage = `🔴 Java Runtime Error:\n${errorMessage}`;
         }
         
         return res.json({ 
           output: stdout || "", 
-          error: stderr || err.message || "Execution failed" 
+          error: errorMessage
         });
       }
 
