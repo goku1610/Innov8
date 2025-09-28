@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes.llm import router as llm_router
+from .utils.llm_logger import _get_log_path
 
 
 app = FastAPI(title="AI Backend")
@@ -22,6 +23,18 @@ app.add_middleware(
 
 
 app.include_router(llm_router, prefix="/api")
+
+
+@app.on_event("startup")
+async def _clear_llm_responses_log() -> None:
+    """Truncate the temporary LLM responses log on each service (re)start."""
+    try:
+        log_path = _get_log_path()
+        # Create/truncate the file
+        log_path.write_text("", encoding="utf-8")
+    except Exception:
+        # Best-effort cleanup; avoid failing app startup
+        pass
 
 
 if __name__ == "__main__":

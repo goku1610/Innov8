@@ -14,11 +14,21 @@ async def generate_endpoint(payload: GenerateRequest) -> GenerateResponse:
         if mode == "full":
             if not payload.code:
                 raise HTTPException(status_code=400, detail="code is required for mode=full")
-            response_text = await generate_text_response_full(payload.code, payload.session_id, payload.metrics or {})
+            response_text = await generate_text_response_full(
+                payload.code,
+                payload.session_id,
+                payload.metrics or {},
+                payload.question_json or None,
+            )
         elif mode == "patch":
             if not payload.patch:
                 raise HTTPException(status_code=400, detail="patch is required for mode=patch")
-            response_text = await generate_text_response_patch(payload.patch, payload.session_id, payload.metrics_patch or {})
+            response_text = await generate_text_response_patch(
+                payload.patch,
+                payload.session_id,
+                payload.metrics_patch or {},
+                payload.question_json or None,
+            )
         else:
             raise HTTPException(status_code=400, detail="mode must be 'full' or 'patch'")
 

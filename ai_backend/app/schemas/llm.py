@@ -11,6 +11,8 @@ class GenerateRequest(BaseModel):
     patch: Optional[str] = None  # required when mode=='patch'
     metrics: Optional[dict] = None  # present in full mode
     metrics_patch: Optional[dict] = None  # present in patch mode
+    # Full JSON of the currently selected question from the UI
+    question_json: Optional[dict] = None
 
 
 class GenerateResponse(BaseModel):
