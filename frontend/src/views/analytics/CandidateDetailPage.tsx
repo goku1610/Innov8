@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Doughnut, Line, Radar } from 'react-chartjs-2';
 import PlaybackModal, { PlaybackData } from './PlaybackModal';
 import {
   Chart as ChartJS,
@@ -9,10 +9,27 @@ import {
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  RadialLinearScale
 } from 'chart.js';
+import { 
+  Badge, 
+  Card,
+  CardHeader,
+  CardContent,
+  Gauge, 
+  Progress,
+  Button,
+  TabNav,
+  StatCard,
+  Tooltip as UITooltip
+} from '../../components/ui';
+import '../../analytics.css';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, RadialLinearScale);
 
 type CandidateData = {
   name: string;
@@ -44,6 +61,13 @@ type CandidateData = {
     readability: string;
     alternatives: string;
   };
+  // New fields for enhanced analytics
+  codingTimeHistory?: number[]; // Time series data for coding progress
+  errorRate?: number; // 0-100
+  testingApproach?: 'tdd' | 'manual' | 'none';
+  communicationScore?: number; // 0-10
+  problemSolvingSteps?: string[];
+  optimizationSteps?: string[];
 };
 
 const SAMPLE_DATA: Record<string, CandidateData> = {
@@ -86,7 +110,23 @@ const SAMPLE_DATA: Record<string, CandidateData> = {
       methodology: 'Used a single-pass hash map to store complements. Consider pre-validating inputs.',
       readability: 'Consistent indentation, reasonably named functions. Variable naming could be clearer.',
       alternatives: 'Two-pass hash map or sorting + two pointers (O(n log n)).'
-    }
+    },
+    codingTimeHistory: [0, 5, 12, 18, 25, 30, 35, 40, 42, 45],
+    errorRate: 15,
+    testingApproach: 'manual',
+    communicationScore: 9,
+    problemSolvingSteps: [
+      'Understood the problem requirements',
+      'Identified brute force approach first',
+      'Optimized to hash map solution',
+      'Tested with provided examples',
+      'Explained time complexity'
+    ],
+    optimizationSteps: [
+      'Initial O(n²) nested loops',
+      'Optimized to O(n) hash map',
+      'Added input validation'
+    ]
   },
   'john-smith': {
     name: 'John Smith',
@@ -160,25 +200,27 @@ const SAMPLE_DATA: Record<string, CandidateData> = {
   }
 };
 
-const Gauge: React.FC<{ label: string; score: number }> = ({ label, score }) => {
-  const pct = Math.max(0, Math.min(10, score)) * 10;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 160 }}>
-      <div style={{ fontSize: 14, color: '#555' }}>{label}</div>
-      <div style={{ height: 12, background: '#eee', borderRadius: 999, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444' }} />
-      </div>
-      <div style={{ fontWeight: 600 }}>{score}/10</div>
-    </div>
-  );
-};
+
 
 const CandidateDetailPage: React.FC = () => {
   const { candidateId } = useParams();
   const navigate = useNavigate();
   const data = SAMPLE_DATA[candidateId || ''] || SAMPLE_DATA['jane-doe'];
-  const [activeTab, setActiveTab] = useState<'quality' | 'performance'>('quality');
+  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'quality' | 'communication'>('overview');
   const [isPlaybackOpen, setIsPlaybackOpen] = useState<boolean>(false);
+
+  // Helper functions
+  const getDifficultyVariant = (difficulty: string) => {
+    switch (difficulty) {
+      case 'Easy': return 'success';
+      case 'Medium': return 'warning'; 
+      case 'Hard': return 'error';
+      default: return 'gray';
+    }
+  };
+
+  const passedTests = data.performance.tests.filter(test => test.passed).length;
+
   const playbackSample: PlaybackData = {
     language: 'python',
     initialCode: '',
@@ -219,78 +261,379 @@ const CandidateDetailPage: React.FC = () => {
     };
   }, [data]);
 
+  const skillRadarData = useMemo(() => ({
+    labels: ['Problem Solving', 'Code Quality', 'Performance', 'Communication', 'Testing', 'Debugging'],
+    datasets: [{
+      label: 'Candidate Skills',
+      data: [
+        data.algorithm.efficiencyScore,
+        data.readability_score,
+        Math.min(10, (data.performance.execBaselineMs / data.performance.execAvgMs) * 10),
+        data.communicationScore || 8,
+        (passedTests / data.performance.tests.length) * 10,
+        10 - (data.errorRate || 15) / 10
+      ],
+      backgroundColor: 'rgba(59, 130, 246, 0.2)',
+      borderColor: 'rgba(59, 130, 246, 1)',
+      borderWidth: 2,
+      pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+    }]
+  }), [data, passedTests]);
+
+  const codingProgressData = useMemo(() => ({
+    labels: Array.from({ length: 10 }, (_, i) => `${(i + 1) * 5}min`),
+    datasets: [{
+      label: 'Coding Progress',
+      data: data.codingTimeHistory || [0, 10, 25, 35, 50, 65, 75, 85, 90, 100],
+      borderColor: 'rgba(34, 197, 94, 1)',
+      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+      fill: true,
+      tension: 0.4,
+    }]
+  }), [data]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Top-Level Summary Card */}
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, background: '#fff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {data.name} - {data.problemTitle} (difficulty: {data.difficulty})
+    <div className="analytics-main fade-in">
+      {/* Header with candidate info and actions */}
+      <Card className="mb-6">
+        <CardContent>
+          <div className="flex justify-between items-start gap-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-4 mb-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">{data.name}</h1>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-gray-600">{data.problemTitle}</span>
+                    <Badge variant={getDifficultyVariant(data.difficulty)}>
+                      {data.difficulty}
+                    </Badge>
+                    <Badge variant={data.algorithm.foundOptimal ? 'success' : 'warning'}>
+                      {data.algorithm.foundOptimal ? 'Optimal Solution' : 'Sub-optimal'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-gray-700 mb-4">{data.final_summary.text}</p>
+              
+              <div className="flex items-center gap-6 text-sm text-gray-600">
+                <span>⏱️ Time: {data.algorithm.timeComplexity}</span>
+                <span>💾 Space: {data.algorithm.spaceComplexity}</span>
+                <span>🎯 Optimal: {data.algorithm.optimalTimeComplexity}, {data.algorithm.optimalSpaceComplexity}</span>
+              </div>
             </div>
-            <div style={{ marginTop: 8, color: '#374151' }}>
-              <strong>Summary:</strong> {data.final_summary.text}
-            </div>
-            <div style={{ marginTop: 8, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              <Gauge label="Code Readability" score={data.readability_score} />
-              <Gauge label="Algorithm Efficiency" score={data.algorithm.efficiencyScore} />
-            </div>
-            <div style={{ marginTop: 8, color: '#4b5563' }}>
-              Time: {data.algorithm.timeComplexity} (optimal {data.algorithm.optimalTimeComplexity}) · Space: {data.algorithm.spaceComplexity} (optimal {data.algorithm.optimalSpaceComplexity})
+            
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => navigate('/analytics')}>
+                ← All Candidates
+              </Button>
+              <Button variant="primary" onClick={() => setIsPlaybackOpen(true)}>
+                📹 View Session
+              </Button>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => navigate('/analytics')}>All Candidates</button>
-            <button onClick={() => setIsPlaybackOpen(true)}>Open Session Playback</button>
-          </div>
-        </div>
+        </CardContent>
+      </Card>
+
+      {/* Key Metrics Overview */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <StatCard
+          label="Code Quality"
+          value={`${data.readability_score}/10`}
+          icon="📝"
+          change={{ value: "Above average", positive: data.readability_score > 6 }}
+        />
+        <StatCard
+          label="Algorithm Score"
+          value={`${data.algorithm.efficiencyScore}/10`}
+          icon="⚡"
+          change={{ value: "Optimal found", positive: data.algorithm.foundOptimal }}
+        />
+        <StatCard
+          label="Communication"
+          value={`${data.communicationScore || 8}/10`}
+          icon="💬"
+        />
+        <StatCard
+          label="Error Rate"
+          value={`${data.errorRate || 15}%`}
+          icon="🐛"
+          change={{ value: "Below threshold", positive: (data.errorRate || 15) < 20 }}
+        />
+      </div>
+
+      {/* Main Dashboard Grid */}
+      <div className="grid grid-cols-3 gap-6 mb-6">
+        {/* Performance Gauges */}
+        <Card>
+          <CardHeader title="Performance Scores" />
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <Gauge label="Code Quality" value={data.readability_score} />
+              <Gauge label="Efficiency" value={data.algorithm.efficiencyScore} />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Test Results */}
+        <Card>
+          <CardHeader title="Test Results" subtitle={`${passedTests}/${data.performance.tests.length} passed`} />
+          <CardContent>
+            <div className="space-y-3">
+              {data.performance.tests.map((test, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700">{test.label}</span>
+                  <Badge variant={test.passed ? 'success' : 'error'} size="sm">
+                    {test.passed ? '✅ Pass' : '❌ Fail'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+            <Progress 
+              value={(passedTests / data.performance.tests.length) * 100}
+              label="Overall Test Success"
+              showValue
+              variant={passedTests === data.performance.tests.length ? 'success' : 'warning'}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Problem Solving Process */}
+        <Card>
+          <CardHeader title="Problem Solving Steps" />
+          <CardContent>
+            <div className="space-y-2">
+              {(data.problemSolvingSteps || []).map((step, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-600 text-xs flex items-center justify-center font-bold mt-0.5">
+                    {i + 1}
+                  </div>
+                  <span className="text-sm text-gray-700">{step}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Detailed Analysis Tabs */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => setActiveTab('quality')} style={{ fontWeight: activeTab === 'quality' ? 700 : 500 }}>Code Quality Analysis</button>
-        <button onClick={() => setActiveTab('performance')} style={{ fontWeight: activeTab === 'performance' ? 700 : 500 }}>Performance Metrics</button>
-      </div>
+      <TabNav
+        tabs={[
+          { key: 'overview', label: 'Overview', icon: '📊' },
+          { key: 'performance', label: 'Performance', icon: '⚡' },
+          { key: 'quality', label: 'Code Quality', icon: '📝' },
+          { key: 'communication', label: 'Communication', icon: '💬' }
+        ]}
+        activeTab={activeTab}
+        onTabChange={(tab) => setActiveTab(tab as 'overview' | 'performance' | 'quality' | 'communication')}
+      />
 
-      {activeTab === 'quality' ? (
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, background: '#fff' }}>
-          <h3>Problem-Solving Methodology</h3>
-          <p>{data.deep_quality_assessment_report.methodology}</p>
-          <h3>Readability Feedback</h3>
-          <p>{data.deep_quality_assessment_report.readability}</p>
-          <h3>Alternative Solutions</h3>
-          <p>{data.deep_quality_assessment_report.alternatives}</p>
-          <div style={{ marginTop: 12 }}>
-            <h4>Strengths</h4>
-            <ul>
-              {data.final_summary.strengths.map((s, i) => (
-                <li key={i}>✅ {s}</li>
-              ))}
-            </ul>
-            <h4>Areas for Improvement</h4>
-            <ul>
-              {data.final_summary.areas_for_improvement.map((s, i) => (
-                <li key={i}>🟠 {s}</li>
-              ))}
-            </ul>
-          </div>
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-2 gap-6">
+          <Card>
+            <CardHeader title="Performance vs Baseline" />
+            <CardContent>
+              <Bar 
+                data={perfChartData} 
+                options={{ 
+                  responsive: true, 
+                  plugins: { 
+                    legend: { position: 'top' as const },
+                    tooltip: {
+                      callbacks: {
+                        label: (context) => {
+                          const label = context.dataset.label || '';
+                          const value = context.parsed.y;
+                          const unit = context.dataIndex === 0 ? 'ms' : 'MB';
+                          return `${label}: ${value}${unit}`;
+                        }
+                      }
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true
+                    }
+                  }
+                }} 
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader title="Skill Assessment" />
+            <CardContent>
+              <Radar 
+                data={skillRadarData}
+                options={{
+                  responsive: true,
+                  plugins: {
+                    legend: { position: 'top' as const }
+                  },
+                  scales: {
+                    r: {
+                      beginAtZero: true,
+                      max: 10,
+                      ticks: {
+                        stepSize: 2
+                      }
+                    }
+                  }
+                }}
+              />
+            </CardContent>
+          </Card>
         </div>
-      ) : (
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, background: '#fff', display: 'grid', gap: 16 }}>
-          <div>
-            <h3>Execution Time vs Baseline</h3>
-            <Bar data={perfChartData} options={{ responsive: true, plugins: { legend: { position: 'top' as const } } }} />
-          </div>
-          <div>
-            <h3>Test Cases</h3>
-            <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
-              {data.performance.tests.map((t, i) => (
-                <li key={i} style={{ listStyle: 'none' }}>{t.passed ? '✅' : '❌'} {t.label}</li>
-              ))}
-            </ul>
+      )}
+
+      {activeTab === 'performance' && (
+        <div className="grid gap-6">
+          <div className="grid grid-cols-2 gap-6">
+            <Card>
+              <CardHeader title="Execution Metrics" />
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Execution Time</span>
+                    <div className="text-right">
+                      <div className="font-bold">{data.performance.execAvgMs}ms</div>
+                      <div className="text-sm text-gray-500">baseline: {data.performance.execBaselineMs}ms</div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Memory Usage</span>
+                    <div className="text-right">
+                      <div className="font-bold">{data.performance.memPeakMb}MB</div>
+                      <div className="text-sm text-gray-500">baseline: {data.performance.memBaselineMb}MB</div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Error Rate</span>
+                    <div className="text-right">
+                      <div className="font-bold">{data.errorRate || 15}%</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader title="Coding Progress" />
+              <CardContent>
+                <Line
+                  data={codingProgressData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: { display: false }
+                    },
+                    scales: {
+                      x: {
+                        title: {
+                          display: true,
+                          text: 'Time (minutes)'
+                        }
+                      },
+                      y: {
+                        title: {
+                          display: true,
+                          text: 'Progress %'
+                        },
+                        beginAtZero: true,
+                        max: 100
+                      }
+                    }
+                  }}
+                />
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
+
+      {activeTab === 'quality' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader title="Code Quality Analysis" />
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Methodology</h4>
+                  <p className="text-gray-700 text-sm">{data.deep_quality_assessment_report.methodology}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Readability</h4>
+                  <p className="text-gray-700 text-sm">{data.deep_quality_assessment_report.readability}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Alternatives</h4>
+                  <p className="text-gray-700 text-sm">{data.deep_quality_assessment_report.alternatives}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-2 gap-6">
+            <Card>
+              <CardHeader title="Strengths" />
+              <CardContent>
+                <div className="space-y-2">
+                  {data.final_summary.strengths.map((strength, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-green-500 text-lg">✅</span>
+                      <span className="text-gray-700">{strength}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader title="Areas for Improvement" />
+              <CardContent>
+                <div className="space-y-2">
+                  {data.final_summary.areas_for_improvement.map((area, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-orange-500 text-lg">�</span>
+                      <span className="text-gray-700">{area}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'communication' && (
+        <Card>
+          <CardHeader title="Communication Assessment" />
+          <CardContent>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-semibold mb-4">Communication Metrics</h4>
+                <div className="space-y-4">
+                  <Progress label="Clarity of Explanation" value={85} showValue />
+                  <Progress label="Problem Understanding" value={90} showValue />
+                  <Progress label="Solution Walkthrough" value={80} showValue />
+                  <Progress label="Q&A Responsiveness" value={88} showValue />
+                </div>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-4">Key Observations</h4>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li>• Clear articulation of approach and reasoning</li>
+                  <li>• Good use of examples to explain concepts</li>
+                  <li>• Proactive communication during coding</li>
+                  <li>• Responded well to follow-up questions</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <PlaybackModal open={isPlaybackOpen} onClose={() => setIsPlaybackOpen(false)} data={playbackSample} />
     </div>
   );
