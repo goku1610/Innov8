@@ -1,11 +1,20 @@
 from langchain_google_genai import GoogleGenerativeAI
-import os
 import json
 
-def generate_response(prompt, system_prompt=None, temperature=0.7):
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable is required")
+# Use GEMINI_API_KEY environment variable
+import os
+AI_BACKEND_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not AI_BACKEND_GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY environment variable is required")
+
+print(f"🔑 AI Backend using Gemini API key: {AI_BACKEND_GEMINI_API_KEY[:10]}...{AI_BACKEND_GEMINI_API_KEY[-4:]}")
+
+
+def generate_response(prompt, system_prompt=None, temperature=0.7, api_key: str | None = None):
+    key_to_use = (api_key or AI_BACKEND_GEMINI_API_KEY) or ""
+    if not key_to_use:
+        raise ValueError("Missing API key: set AI_BACKEND_GEMINI_API_KEY in ai_backend/llm.py or pass api_key explicitly")
     
     # Combine system prompt and user prompt
     full_prompt = prompt
@@ -14,7 +23,7 @@ def generate_response(prompt, system_prompt=None, temperature=0.7):
     
     llm = GoogleGenerativeAI(
         model="gemini-flash-latest", 
-        google_api_key=api_key,
+        google_api_key=key_to_use,
         temperature=temperature,
     )
     

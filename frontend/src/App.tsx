@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
-import { sendFullSnapshot, sendPatchSnapshot } from './api';
+import { sendFullSnapshot, sendPatchSnapshot, fetchQuestionByIndex, fetchQuestions, type QuestionItem } from './api';
 import { useVoiceRecording } from './hooks/useVoiceRecording';
 import { useTextToSpeech } from './hooks/useTextToSpeech';
 import { isVoiceSupported } from './services/sarvamApi';
@@ -62,9 +62,12 @@ interface ChatMessage {
   timestamp: Date;
 }
 
-interface ChatBoxProps {}
+interface ChatBoxProps {
+  getCurrentCode: () => string;
+  currentQuestion: QuestionItem | null;
+}
 
-const ChatBox: React.FC<ChatBoxProps> = () => {
+const ChatBox: React.FC<ChatBoxProps> = ({ getCurrentCode, currentQuestion }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -91,6 +94,46 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Poll audio backend for assistant messages produced by queued events
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | null = null;
+    const poll = async () => {
+      try {
+        if (!sessionId) return;
+        const resp = await axios.get('http://localhost:5000/chat/events/poll', { params: { sessionId } });
+        const msgs = Array.isArray(resp.data?.messages) ? resp.data.messages : [];
+        if (!cancelled && msgs.length) {
+          const toAppend = msgs.map((m: any, idx: number) => ({
+            id: `${Date.now()}-${idx}`,
+            text: String(m?.content ?? ''),
+            sender: 'bot' as const,
+            timestamp: new Date()
+          }));
+          setMessages(prev => [...prev, ...toAppend]);
+          // Auto-speak newest one
+          const last = toAppend[toAppend.length - 1];
+          if (last && last.text) {
+            try { await textToSpeech.speakWithBrowser(last.text); } catch {};
+          }
+        }
+      } catch {}
+      if (!cancelled) {
+        // @ts-ignore - window.setTimeout returns number in browser
+        timer = window.setTimeout(poll, 1500);
+      }
+    };
+    // start polling
+    // @ts-ignore
+    timer = window.setTimeout(poll, 1000);
+    return () => {
+      cancelled = true;
+      if (timer) {
+        window.clearTimeout(timer as any);
+      }
+    };
+  }, [sessionId, textToSpeech]);
+
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || inputText.trim();
     if (!textToSend || isLoading) return;
@@ -107,9 +150,19 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/chat', {
-        message: textToSend
-      });
+      // Include question only once per session unless it changed
+      const payload: any = {
+        message: textToSend,
+        sessionId: sessionId || undefined,
+        code: getCurrentCode(),
+      };
+      (ChatBox as any)._lastQuestionIdRef = (ChatBox as any)._lastQuestionIdRef || { current: null };
+      const lastQuestionIdRef = (ChatBox as any)._lastQuestionIdRef as { current: string | null };
+      if (currentQuestion && currentQuestion.id !== lastQuestionIdRef.current) {
+        payload.questionJson = currentQuestion;
+        lastQuestionIdRef.current = currentQuestion.id;
+      }
+      const response = await axios.post('http://localhost:5000/chat', payload);
 
       // Update session ID if provided by backend
       if (response.data.sessionId && response.data.sessionId !== sessionId) {
@@ -153,12 +206,6 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
 
   // Voice recording handlers
   const handleVoiceStart = async () => {
@@ -183,7 +230,18 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
       
       if (transcript && transcript.trim()) {
         // Send the transcript as a message
-        handleSendMessage(transcript.trim());
+        const trimmed = transcript.trim();
+        handleSendMessage(trimmed);
+        // Enqueue USER_SPEECH event to audio backend for prioritized handling
+        try {
+          await axios.post('http://localhost:5000/events/enqueue', {
+            type: 'USER_SPEECH',
+            sessionId: sessionId || undefined,
+            userMessage: trimmed,
+            code: getCurrentCode(),
+            questionJson: currentQuestion || undefined,
+          });
+        } catch (_) {}
       }
     } catch (error) {
       console.error('Failed to stop voice recording:', error);
@@ -235,16 +293,7 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
         <div ref={messagesEndRef} />
       </div>
       <div className="chat-input-row">
-        <input
-          className="chat-input"
-          placeholder={voiceRecording.isRecording ? "🎤 Listening..." : "Ask me anything about coding..."}
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={isLoading || voiceRecording.isRecording}
-        />
-        
-        {/* Voice controls */}
+        {/* Voice controls (audio-only chat) */}
         {isVoiceSupportedBrowser && (
           <button
             className={`voice-button ${voiceRecording.isRecording ? 'recording' : ''}`}
@@ -290,14 +339,6 @@ const ChatBox: React.FC<ChatBoxProps> = () => {
             {textToSpeech.isLoading ? '🔄' : textToSpeech.isPlaying ? '🔇' : '🔊'}
           </button>
         )}
-        
-        <button
-          className="chat-send"
-          onClick={() => handleSendMessage()}
-          disabled={!inputText.trim() || isLoading || voiceRecording.isRecording}
-        >
-          {isLoading ? '...' : 'Send'}
-        </button>
       </div>
       
       {/* Voice error display */}
@@ -325,6 +366,9 @@ function App() {
   const navigate = useNavigate();
   const [selectedLanguage, setSelectedLanguage] = useState('python');
   const [code, setCode] = useState(DEFAULT_CODE.python);
+  const [questions, setQuestions] = useState<QuestionItem[] | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [currentQuestion, setCurrentQuestion] = useState<QuestionItem | null>(null);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
@@ -360,6 +404,8 @@ function App() {
   const selectedLanguageRef = useRef<string>(selectedLanguage);
   const syntaxErrorsRef = useRef<SyntaxError[]>(syntaxErrors);
   const hasSyntaxErrorsRef = useRef<boolean>(hasSyntaxErrors);
+  // Keep current question in a ref so snapshot loop can read it without re-registering interval
+  const currentQuestionRef = useRef<QuestionItem | null>(null);
 
   // ADD THESE TWO NEW REFS
   const lineUpdateBufferRef = useRef<Record<number, { timestamp: number, content: string }>>({});
@@ -400,6 +446,51 @@ function App() {
       });
     } catch (_) {}
   }, []);
+
+  // --- Questions loading and navigation ---
+  useEffect(() => {
+    const loadInitialQuestion = async () => {
+      try {
+        // Load all metadata once to know total
+        const all = await fetchQuestions();
+        setQuestions(all.questions);
+        // Load first question explicitly to keep API uniform
+        const one = await fetchQuestionByIndex(0);
+        setCurrentQuestionIndex(0);
+        setCurrentQuestion(one.question);
+      } catch (e) {
+        console.error('Failed to load questions:', e);
+      }
+    };
+    loadInitialQuestion();
+  }, []);
+
+  const canGoPrev = currentQuestionIndex > 0;
+  const canGoNext = questions ? currentQuestionIndex < questions.length - 1 : false;
+
+  const goPrevQuestion = async () => {
+    if (!canGoPrev) return;
+    const nextIndex = currentQuestionIndex - 1;
+    try {
+      const res = await fetchQuestionByIndex(nextIndex);
+      setCurrentQuestionIndex(nextIndex);
+      setCurrentQuestion(res.question);
+    } catch (e) {
+      console.error('Failed to load previous question:', e);
+    }
+  };
+
+  const goNextQuestion = async () => {
+    if (!canGoNext) return;
+    const nextIndex = currentQuestionIndex + 1;
+    try {
+      const res = await fetchQuestionByIndex(nextIndex);
+      setCurrentQuestionIndex(nextIndex);
+      setCurrentQuestion(res.question);
+    } catch (e) {
+      console.error('Failed to load next question:', e);
+    }
+  };
 
   // ADD THIS NEW FUNCTION
   const flushLineUpdates = useCallback(async () => {
@@ -1619,6 +1710,17 @@ function App() {
       });
 
       setResult(response.data);
+      // Enqueue CODE_RUN to audio backend for interviewer commentary
+      try {
+        await axios.post('http://localhost:5000/events/enqueue', {
+          type: 'CODE_RUN',
+          sessionId: sessionIdRef.current,
+          code: code,
+          output: response.data?.output || '',
+          error: response.data?.error || '',
+          questionJson: currentQuestionRef.current || undefined,
+        });
+      } catch (_) {}
     } catch (error: any) {
       setResult({
         output: '',
@@ -1637,6 +1739,7 @@ function App() {
   useEffect(() => { selectedLanguageRef.current = selectedLanguage; }, [selectedLanguage]);
   useEffect(() => { syntaxErrorsRef.current = syntaxErrors; }, [syntaxErrors]);
   useEffect(() => { hasSyntaxErrorsRef.current = hasSyntaxErrors; }, [hasSyntaxErrors]);
+  useEffect(() => { currentQuestionRef.current = currentQuestion; }, [currentQuestion]);
 
   // Text differ for patches (simple diff-match-patch compatible generation)
   const makePatch = useCallback((oldText: string, newText: string): string => {
@@ -1667,20 +1770,44 @@ function App() {
       if (!currentCode.trim()) return;
       try {
         let respText = '';
+        const qjson = currentQuestionRef.current ? currentQuestionRef.current : undefined;
         if (!lastCodeRef.current) {
-          respText = await sendFullSnapshot(currentCode, sessionIdRef.current);
+          respText = await sendFullSnapshot(currentCode, sessionIdRef.current, qjson);
         } else {
           const patch = makePatch(lastCodeRef.current, currentCode);
           if (patch) {
-            respText = await sendPatchSnapshot(patch, sessionIdRef.current);
+            respText = await sendPatchSnapshot(patch, sessionIdRef.current, qjson);
           } else {
-            respText = await sendFullSnapshot(currentCode, sessionIdRef.current);
+            respText = await sendFullSnapshot(currentCode, sessionIdRef.current, qjson);
           }
         }
         if (!cancelled) {
           // eslint-disable-next-line no-console
           console.log('[AI 30s]', respText);
         }
+        // If SLM indicates escalation, enqueue SLM event for audio interviewer
+        try {
+          let should = false;
+          let obj: any = null;
+          try { obj = JSON.parse(respText); } catch (_) {}
+          if (!obj) {
+            const m = respText && respText.match(/\{[\s\S]*?\}/);
+            if (m) {
+              try { obj = JSON.parse(m[0]); } catch (_) {}
+            }
+          }
+          if (obj && typeof obj === 'object' && (obj.should_call_llm === true || obj.should_call_llm === 'true')) {
+            should = true;
+          }
+          if (should) {
+            await axios.post('http://localhost:5000/events/enqueue', {
+              type: 'SLM',
+              sessionId: sessionIdRef.current || undefined,
+              code: currentCode,
+              questionJson: currentQuestionRef.current || undefined,
+            });
+          }
+        } catch (_) {}
         lastCodeRef.current = currentCode;
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -1934,15 +2061,107 @@ function App() {
         <div className="pane pane-left" style={{ width: `${leftWidthPct}%` }}>
           <div className="pane-header">Question</div>
           <div className="pane-content question-content">
-            <h3>Two Sum</h3>
-            <p>
-              Given an array of integers nums and an integer target, return indices of the two numbers 
-              such that they add up to target.
-            </p>
-            <p>
-              You may assume that each input would have exactly one solution, and you may not use the same element twice.
-            </p>
-            <p>Example: nums = [2,7,11,15], target = 9 → [0,1]</p>
+            {/* Navigation controls */}
+            <div className="question-nav" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <button onClick={goPrevQuestion} disabled={!canGoPrev}>Previous</button>
+              <span style={{ opacity: 0.8, fontSize: 12 }}>
+                {questions ? `Question ${currentQuestionIndex + 1} of ${questions.length}` : 'Loading questions...'}
+              </span>
+              <button onClick={goNextQuestion} disabled={!canGoNext} style={{ marginLeft: 'auto' }}>Next</button>
+            </div>
+
+            {!currentQuestion ? (
+              <div style={{ opacity: 0.8 }}>Loading question…</div>
+            ) : (
+              <div className="question-details" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <h3 style={{ margin: 0 }}>{currentQuestion.title}</h3>
+                {/* Difficulty + Concepts */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span className={`chip diff-${currentQuestion.difficulty?.label || 'unknown'}`}>
+                    {currentQuestion.difficulty?.label}
+                    {typeof currentQuestion.difficulty?.numeric === 'number' ? ` (${currentQuestion.difficulty.numeric})` : ''}
+                  </span>
+                  {currentQuestion.concepts?.map((c) => (
+                    <span key={c} className="chip" style={{ background: '#1f2937', borderRadius: 12, padding: '2px 8px', fontSize: 12 }}>{c}</span>
+                  ))}
+                </div>
+
+                {currentQuestion.short_description && (
+                  <p style={{ marginTop: 4 }}>{currentQuestion.short_description}</p>
+                )}
+
+                {currentQuestion.Full_question && (
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Problem</div>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{currentQuestion.Full_question}</div>
+                  </div>
+                )}
+
+                {/* Constraints */}
+                {currentQuestion.constraints && (
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Constraints</div>
+                    <ul style={{ marginTop: 4 }}>
+                      {typeof currentQuestion.constraints.time_ms === 'number' && (
+                        <li>Time limit: {currentQuestion.constraints.time_ms} ms</li>
+                      )}
+                      {typeof currentQuestion.constraints.memory_mb === 'number' && (
+                        <li>Memory limit: {currentQuestion.constraints.memory_mb} MB</li>
+                      )}
+                      {Array.isArray(currentQuestion.constraints.allowed_libs) && currentQuestion.constraints.allowed_libs.length > 0 && (
+                        <li>Allowed libs: {currentQuestion.constraints.allowed_libs.join(', ')}</li>
+                      )}
+                      {Array.isArray(currentQuestion.constraints.forbidden_calls) && currentQuestion.constraints.forbidden_calls.length > 0 && (
+                        <li>Forbidden calls: {currentQuestion.constraints.forbidden_calls.join(', ')}</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Public tests */}
+                {Array.isArray(currentQuestion.public_tests) && currentQuestion.public_tests.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Public Tests</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {currentQuestion.public_tests.slice(0, 3).map((t, i) => (
+                        <div key={i} style={{ border: '1px solid #334155', borderRadius: 6, padding: 8 }}>
+                          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Test {i + 1}</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4 }}>Input</div>
+                              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(t.input)}</pre>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4 }}>Output</div>
+                              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(t.output)}</pre>
+                            </div>
+                          </div>
+                          {t.explanation && (
+                            <div style={{ marginTop: 6 }}>
+                              <div style={{ fontWeight: 600, marginBottom: 2 }}>Explanation</div>
+                              <div>{t.explanation}</div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Edge cases */}
+                {Array.isArray(currentQuestion.edge_cases) && currentQuestion.edge_cases.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Edge Cases</div>
+                    <ul style={{ marginTop: 4 }}>
+                      {currentQuestion.edge_cases.map((e, idx) => (
+                        <li key={idx}>{e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+              </div>
+            )}
           </div>
         </div>
         <div className="gutter-vertical" onMouseDown={beginDragLeft} />
@@ -2141,7 +2360,14 @@ function App() {
         <div className="pane pane-right" style={{ width: `${rightWidthPct}%` }}>
           <div className="pane-header">AI Assistant</div>
           <div className="pane-content chat-content">
-            <ChatBox />
+            <ChatBox
+              getCurrentCode={() => {
+                const editor = editorRef.current;
+                const model = editor?.getModel?.();
+                return (model?.getValue?.() ?? lastCodeRef.current ?? (code ?? '')).toString();
+              }}
+              currentQuestion={currentQuestion}
+            />
           </div>
         </div>
       </div>

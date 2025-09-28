@@ -1,0 +1,2848 @@
+[
+  {
+    "id": "dsa-easy-001",
+    "title": "Two Sum",
+    "Full_question": "Given an array of integers nums and an integer target, return the indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice. You can return the answer in any order.",
+    "short_description": "Find two numbers in an array that sum up to a specific target.",
+    "difficulty": {
+      "numeric": 2,
+      "label": "easy"
+    },
+    "concepts": [
+      "array",
+      "hashing"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "nums": [2, 7, 11, 15],
+          "target": 9
+        },
+        "output": [0, 1],
+        "explanation": "Because nums[0] + nums[1] == 9, we return [0, 1]."
+      },
+      {
+        "input": {
+          "nums": [3, 2, 4],
+          "target": 6
+        },
+        "output": [1, 2],
+        "explanation": null
+      },
+      {
+        "input": {
+          "nums": [3, 3],
+          "target": 6
+        },
+        "output": [0, 1],
+        "explanation": null
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "nums": [-1, -3, 5, 9],
+          "target": 4
+        },
+        "output": [0, 2]
+      },
+      {
+        "input": {
+          "nums": [0, 4, 3, 0],
+          "target": 0
+        },
+        "output": [0, 3]
+      },
+      {
+        "input": {
+          "nums": [100, 250, 75, 50],
+          "target": 125
+        },
+        "output": [2, 3]
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Initialize an empty hash map to store numbers and their corresponding indices.\nIterate through the array nums, accessing each number and its index.\nFor each number, calculate its complement (i.e., target - current_number).\nCheck if the complement exists as a key in the hash map.\nIf the complement is found, return the index of the complement from the hash map and the index of the current number.\nIf the complement is not found, add the current number and its index to the hash map.",
+    "hint_templates": [
+      {
+        "nudge": "A brute-force approach would be to check every pair of numbers. How can you make the lookup for the second number faster than a linear scan?"
+      },
+      {
+        "guide": "Consider using a data structure that offers fast lookups, like a hash map. What would you store in the hash map to solve the problem in a single pass?"
+      },
+      {
+        "direction": "Iterate through the array. For each element num, calculate the required complement target - num. Check if this complement is already in your hash map. If it is, you've found the solution. If not, add the current num and its index to the hash map to be checked against later elements."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 60,
+      "p25_s": 45,
+      "p75_s": 120
+    },
+    "prerequisites": [
+      "arrays",
+      "hashmaps"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 60
+        },
+        {
+          "component": "efficiency_0(n)",
+          "points": 40
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using a dictionary to store seen numbers and their indices, achieving O(n) time complexity and O(n) space complexity.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize a hash map.",
+        "pseudocode": "map = {}",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Loop through the array with index.",
+        "pseudocode": "for i, num in enumerate(nums):",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Calculate complement.",
+        "pseudocode": "complement = target - num",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Check if complement is in map.",
+        "pseudocode": "if complement in map:",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "If found, return indices.",
+        "pseudocode": "return [map[complement], i]",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If not found, add current number to map.",
+        "pseudocode": "map[num] = i",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Array contains negative numbers.",
+      "Array contains duplicate numbers that form a valid pair.",
+      "Target value is zero or negative."
+    ],
+    "learning_objectives": [
+      "use_hashmap_for_efficient_lookups",
+      "trade_space_for_time_complexity"
+    ],
+    "related_problems": [
+      "dsa-medium-001",
+      "dsa-medium-005"
+    ]
+  },
+  {
+    "id": "dsa-easy-002",
+    "title": "Valid Palindrome",
+    "Full_question": "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward. Alphanumeric characters include letters and numbers. Given a string s, return true if it is a palindrome, or false otherwise.",
+    "short_description": "Check if a string is a palindrome after filtering for alphanumeric characters and ignoring case.",
+    "difficulty": {
+      "numeric": 2,
+      "label": "easy"
+    },
+    "concepts": [
+      "string",
+      "two-pointers"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "s": "A man, a plan, a canal: Panama"
+        },
+        "output": true,
+        "explanation": "After processing, the string becomes 'amanaplanacanalpanama', which is a palindrome."
+      },
+      {
+        "input": {
+          "s": "race a car"
+        },
+        "output": false,
+        "explanation": "After processing, the string becomes 'raceacar', which is not a palindrome."
+      },
+      {
+        "input": {
+          "s": ""
+        },
+        "output": true,
+        "explanation": "An empty string reads the same forwards and backwards."
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "s": "0P"
+        },
+        "output": false
+      },
+      {
+        "input": {
+          "s": "Was it a car or a cat I saw?"
+        },
+        "output": true
+      },
+      {
+        "input": {
+          "s": ".,"
+        },
+        "output": true
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Initialize two pointers, left at the beginning of the string and right at the end.\nLoop as long as left is less than right.\nInside the loop, advance the left pointer until it points to an alphanumeric character.\nSimilarly, move the right pointer backward until it points to an alphanumeric character.\nCompare the characters at the left and right pointers, ignoring case.\nIf the characters are not the same, the string is not a palindrome, so return false.\nIf they are the same, move both pointers inward (left++, right--).\nIf the loop completes without finding any mismatches, return true.",
+    "hint_templates": [
+      {
+        "nudge": "How can you compare characters from both ends of the string at the same time, while skipping characters you don't care about?"
+      },
+      {
+        "guide": "Use two pointers, one starting from the beginning and one from the end. You need a strategy to handle non-alphanumeric characters as you move the pointers towards the center."
+      },
+      {
+        "direction": "Initialize left = 0 and right = len(s) - 1. In a while left < right loop, use inner loops to skip non-alphanumeric characters. For the left pointer, while not s[left].isalnum(): left += 1. Do the opposite for the right. Once you have two alphanumeric characters, compare their lowercase versions. If they differ, return false. If they are the same, advance both pointers."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 75,
+      "p25_s": 50,
+      "p75_s": 150
+    },
+    "prerequisites": [
+      "strings",
+      "loops"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "edge_case_handling",
+          "points": 30
+        },
+        {
+          "component": "efficiency",
+          "points": 20
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using two pointers to achieve O(n) time complexity and O(1) space complexity (ignoring the space for the cleaned string if that approach is taken).",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize left and right pointers.",
+        "pseudocode": "left, right = 0, len(s) - 1",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Loop while left pointer is less than right pointer.",
+        "pseudocode": "while left < right:",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Skip non-alphanumeric characters from the left.",
+        "pseudocode": "while left < right and not s[left].isalnum(): left += 1",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Skip non-alphanumeric characters from the right.",
+        "pseudocode": "while left < right and not s[right].isalnum(): right -= 1",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Compare the lowercase characters.",
+        "pseudocode": "if s[left].lower() != s[right].lower(): return False",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "Move pointers inward.",
+        "pseudocode": "left += 1\nright -= 1",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "If the loop finishes, it's a palindrome.",
+        "pseudocode": "return True",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Empty string.",
+      "String with only non-alphanumeric characters.",
+      "String that is already a palindrome.",
+      "String with mixed case characters."
+    ],
+    "learning_objectives": [
+      "two-pointers_technique",
+      "string_manipulation",
+      "character_property_checks"
+    ],
+    "related_problems": [
+      "dsa-medium-003",
+      "dsa-easy-005"
+    ]
+  },
+  {
+    "id": "dsa-easy-003",
+    "title": "Best Time to Buy and Sell Stock",
+    "Full_question": "You are given an array prices where prices[i] is the price of a given stock on the ith day. You want to maximize your profit by choosing a single day to buy one stock and choosing a different day in the future to sell that stock. Return the maximum profit you can achieve from this transaction. If you cannot achieve any profit, return 0.",
+    "short_description": "Find the maximum profit from a single buy and sell transaction of a stock.",
+    "difficulty": {
+      "numeric": 3,
+      "label": "easy"
+    },
+    "concepts": [
+      "array",
+      "greedy",
+      "dynamic-programming"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "prices": [7, 1, 5, 3, 6, 4]
+        },
+        "output": 5,
+        "explanation": "Buy on day 2 (price = 1) and sell on day 5 (price = 6), profit = 6-1 = 5."
+      },
+      {
+        "input": {
+          "prices": [7, 6, 4, 3, 1]
+        },
+        "output": 0,
+        "explanation": "In this case, no transactions are done and the max profit is 0."
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "prices": [1]
+        },
+        "output": 0
+      },
+      {
+        "input": {
+          "prices": [2, 4, 1]
+        },
+        "output": 2
+      },
+      {
+        "input": {
+          "prices": [2, 1, 2, 1, 0, 1, 2]
+        },
+        "output": 2
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Initialize a variable min_price to a very large number (or the first price).\nInitialize a variable max_profit to 0.\nIterate through the prices array, one price at a time.\nFor each price, check if it's lower than the current min_price. If so, update min_price.\nAlternatively, calculate the potential profit by subtracting min_price from the current price.\nIf this potential profit is greater than max_profit, update max_profit.\nAfter the loop finishes, return max_profit.",
+    "hint_templates": [
+      {
+        "nudge": "To maximize profit, you need to buy low and sell high. How can you keep track of the lowest buying price you've seen so far as you iterate through the days?"
+      },
+      {
+        "guide": "You can solve this in a single pass. As you iterate through the prices, maintain two pieces of information: the minimum price encountered so far, and the maximum profit found so far."
+      },
+      {
+        "direction": "Initialize min_price = float('inf') and max_profit = 0. Loop through the prices. For each price, first calculate a potential profit: profit = price - min_price. Then, update max_profit = max(max_profit, profit). After that, update the minimum price seen so far: min_price = min(min_price, price). Return max_profit after the loop."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 90,
+      "p25_s": 60,
+      "p75_s": 180
+    },
+    "prerequisites": [
+      "arrays"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 60
+        },
+        {
+          "component": "single_pass_efficiency",
+          "points": 40
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution that iterates through the array once, keeping track of the minimum price seen so far and the max profit. This achieves O(n) time and O(1) space complexity.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Handle the base case of an empty or single-element array.",
+        "pseudocode": "if not prices: return 0",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Initialize min_price and max_profit.",
+        "pseudocode": "min_price = prices[0]\nmax_profit = 0",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Loop through prices starting from the second day.",
+        "pseudocode": "for i from 1 to len(prices)-1:",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Calculate potential profit with current price.",
+        "pseudocode": "profit = prices[i] - min_price",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Update max_profit if current profit is higher.",
+        "pseudocode": "max_profit = max(max_profit, profit)",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "Update min_price if a new minimum is found.",
+        "pseudocode": "min_price = min(min_price, prices[i])",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Return the final max_profit.",
+        "pseudocode": "return max_profit",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Array with only one element.",
+      "Prices are in strictly descending order (no profit possible).",
+      "All prices are the same."
+    ],
+    "learning_objectives": [
+      "greedy_approach",
+      "single_pass_optimization",
+      "state_tracking"
+    ],
+    "related_problems": [
+      "dsa-medium-004"
+    ]
+  },
+  {
+    "id": "dsa-easy-004",
+    "title": "Contains Duplicate",
+    "Full_question": "Given an integer array nums, return true if any value appears at least twice in the array, and return false if every element is distinct.",
+    "short_description": "Check if an array contains any duplicate elements.",
+    "difficulty": {
+      "numeric": 1,
+      "label": "easy"
+    },
+    "concepts": [
+      "array",
+      "hashing",
+      "sets"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "nums": [1, 2, 3, 1]
+        },
+        "output": true
+      },
+      {
+        "input": {
+          "nums": [1, 2, 3, 4]
+        },
+        "output": false
+      },
+      {
+        "input": {
+          "nums": [1, 1, 1, 3, 3, 4, 3, 2, 4, 2]
+        },
+        "output": true
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "nums": []
+        },
+        "output": false
+      },
+      {
+        "input": {
+          "nums": [0]
+        },
+        "output": false
+      },
+      {
+        "input": {
+          "nums": [0, 4, 5, 0, 3, 6]
+        },
+        "output": true
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Initialize an empty hash set.\nIterate through each number in the input array nums.\nFor each number, check if it is already present in the hash set.\nIf the number is already in the set, a duplicate has been found, so return true.\nIf the number is not in the set, add it to the set.\nIf the loop completes without finding any duplicates, return false.",
+    "hint_templates": [
+      {
+        "nudge": "How can you keep track of the numbers you've already seen in an efficient way?"
+      },
+      {
+        "guide": "A hash set provides very fast O(1) average time complexity for insertions and lookups. This could be useful for checking if you've encountered a number before."
+      },
+      {
+        "direction": "Create an empty hash set. Loop through each num in the nums array. Inside the loop, check if num is in the hash set. If it is, return true. Otherwise, add num to the hash set. If the loop finishes, it means no duplicates were found, so return false."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 30,
+      "p25_s": 20,
+      "p75_s": 60
+    },
+    "prerequisites": [
+      "arrays",
+      "hashmaps",
+      "sets"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 60
+        },
+        {
+          "component": "time_and_space_efficiency",
+          "points": 40
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using a hash set to achieve O(n) time complexity and O(n) space complexity.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize an empty hash set.",
+        "pseudocode": "hashset = set()",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Iterate through each number in the array.",
+        "pseudocode": "for num in nums:",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Check if the number is already in the hash set.",
+        "pseudocode": "if num in hashset:",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "If it is, return true.",
+        "pseudocode": "return True",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "If not, add it to the hash set.",
+        "pseudocode": "hashset.add(num)",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If the loop finishes, return false.",
+        "pseudocode": "return False",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Empty array.",
+      "Array with a single element.",
+      "Array where duplicates appear at the very beginning or end."
+    ],
+    "learning_objectives": [
+      "use_of_sets_for_uniqueness",
+      "understanding_time_space_tradeoffs"
+    ],
+    "related_problems": [
+      "dsa-easy-001",
+      "dsa-easy-005"
+    ]
+  },
+  {
+    "id": "dsa-easy-005",
+    "title": "Valid Anagram",
+    "Full_question": "Given two strings s and t, return true if t is an anagram of s, and false otherwise. An anagram is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
+    "short_description": "Determine if one string is an anagram of another by comparing character counts.",
+    "difficulty": {
+      "numeric": 2,
+      "label": "easy"
+    },
+    "concepts": [
+      "string",
+      "hashing",
+      "sorting"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "s": "anagram",
+          "t": "nagaram"
+        },
+        "output": true
+      },
+      {
+        "input": {
+          "s": "rat",
+          "t": "car"
+        },
+        "output": false
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "s": "a",
+          "t": "ab"
+        },
+        "output": false
+      },
+      {
+        "input": {
+          "s": "aacc",
+          "t": "ccac"
+        },
+        "output": false
+      },
+      {
+        "input": {
+          "s": "listen",
+          "t": "silent"
+        },
+        "output": true
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "First, check if the lengths of the two strings s and t are different. If so, they cannot be anagrams, so return false.\nInitialize a hash map (or an array of size 26 for lowercase English letters) to store character counts.\nIterate through the first string s and increment the count for each character in the hash map.\nIterate through the second string t and decrement the count for each character in the hash map.\nFinally, iterate through the values in the hash map. If any count is not zero, the strings are not anagrams, so return false.\nIf all counts are zero, return true.",
+    "hint_templates": [
+      {
+        "nudge": "Two strings are anagrams if they are made of the exact same letters with the same frequencies. How can you count the letters in each string?"
+      },
+      {
+        "guide": "A hash map is a great way to store character counts. You can iterate through one string to build the counts and then iterate through the second string to check against those counts."
+      },
+      {
+        "direction": "First, check if len(s) != len(t). If they're not equal, return false. Create a hash map. For each character in s, increment its count in the map. Then, for each character in t, decrement its count. If you ever try to decrement a count that is zero or doesn't exist, return false. If you complete the second loop successfully, they are anagrams."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 50,
+      "p25_s": 35,
+      "p75_s": 100
+    },
+    "prerequisites": [
+      "strings",
+      "hashmaps"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "handles_length_mismatch",
+          "points": 20
+        },
+        {
+          "component": "efficiency",
+          "points": 30
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using a hash map (like collections.Counter) or a fixed-size array to count characters. This is O(n) time and O(1) space (since the alphabet size is constant). An alternative O(n log n) solution involves sorting both strings and comparing them.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Check for length inequality.",
+        "pseudocode": "if len(s) != len(t): return False",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Initialize a hash map for character counts.",
+        "pseudocode": "counts = {}",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Populate the map with counts from string s.",
+        "pseudocode": "for char in s: counts[char] = counts.get(char, 0) + 1",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Decrement counts using string t.",
+        "pseudocode": "for char in t: counts[char] = counts.get(char, 0) - 1",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Check if any character count is non-zero.",
+        "pseudocode": "for char in counts: if counts[char] != 0: return False",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If all counts are zero, return true.",
+        "pseudocode": "return True",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Strings of different lengths.",
+      "Strings with repeated characters.",
+      "Empty strings."
+    ],
+    "learning_objectives": [
+      "use_hashmap_for_frequency_counting",
+      "problem_decomposition"
+    ],
+    "related_problems": [
+      "dsa-medium-005",
+      "dsa-easy-004"
+    ]
+  },
+  {
+    "id": "dsa-easy-006",
+    "title": "Invert Binary Tree",
+    "Full_question": "Given the root of a binary tree, invert the tree, and return its root. Inverting a binary tree means that for every node, its left and right children are swapped.",
+    "short_description": "Swap the left and right children for every node in a binary tree.",
+    "difficulty": {
+      "numeric": 3,
+      "label": "easy"
+    },
+    "concepts": [
+      "tree",
+      "recursion",
+      "depth-first-search",
+      "breadth-first-search"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "root": [4, 2, 7, 1, 3, 6, 9]
+        },
+        "output": [4, 7, 2, 9, 6, 3, 1],
+        "explanation": "The original and inverted trees are visually swapped."
+      },
+      {
+        "input": {
+          "root": [2, 1, 3]
+        },
+        "output": [2, 3, 1]
+      },
+      {
+        "input": {
+          "root": []
+        },
+        "output": []
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "root": [1]
+        },
+        "output": [1]
+      },
+      {
+        "input": {
+          "root": [1, 2, null, 3]
+        },
+        "output": [1, null, 2, null, 3]
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Define a function that takes a tree node as input.\nHandle the base case: if the node is null, return null.\nSwap the left and right children of the current node. A temporary variable may be needed.\nRecursively call the function on the (new) left child.\nRecursively call the function on the (new) right child.\nReturn the original node (which is now the root of the inverted subtree).\nCall this function initially with the root of the tree.",
+    "hint_templates": [
+      {
+        "nudge": "Think about what it means to invert a tree at a single node. What operation do you perform? How does this relate to the rest of the tree?"
+      },
+      {
+        "guide": "This problem is a classic example for recursion. You can solve it by defining what to do at the current node, and then letting recursion handle the child nodes."
+      },
+      {
+        "direction": "Write a function invert(node). The base case is if node is None: return. The main logic is to swap the children: node.left, node.right = node.right, node.left. After the swap, you must also invert the subtrees that you just moved. So, call invert(node.left) and invert(node.right)."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 80,
+      "p25_s": 55,
+      "p75_s": 160
+    },
+    "prerequisites": [
+      "binary-trees",
+      "recursion"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 70
+        },
+        {
+          "component": "handles_base_case_(null_node)",
+          "points": 30
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A recursive DFS solution that traverses the tree. At each node, it swaps the left and right children and then makes recursive calls on those children. Time complexity is O(n) as each node is visited once. Space complexity is O(h) where h is the height of the tree, due to the recursion stack.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Define the function and the base case.",
+        "pseudocode": "function invert(node):\n if node is null:\n return null",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Swap the left and right children.",
+        "pseudocode": "temp = node.left\nnode.left = node.right\nnode.right = temp",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Recursively call on the left child.",
+        "pseudocode": "invert(node.left)",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Recursively call on the right child.",
+        "pseudocode": "invert(node.right)",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Return the modified node.",
+        "pseudocode": "return node",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "An empty tree (root is null).",
+      "A tree with only one node.",
+      "A skewed tree (all nodes are on one side)."
+    ],
+    "learning_objectives": [
+      "tree_traversal",
+      "recursion",
+      "depth-first-search"
+    ],
+    "related_problems": [
+      "dsa-medium-002"
+    ]
+  },
+  {
+    "id": "dsa-medium-001",
+    "title": "3Sum",
+    "Full_question": "Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]] such that i != j, i != k, and j != k, and nums[i] + nums[j] + nums[k] == 0. Notice that the solution set must not contain duplicate triplets.",
+    "short_description": "Find all unique triplets in an array that sum to zero.",
+    "difficulty": {
+      "numeric": 5,
+      "label": "medium"
+    },
+    "concepts": [
+      "array",
+      "two-pointers",
+      "sorting"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "nums": [-1, 0, 1, 2, -1, -4]
+        },
+        "output": [
+          [-1, -1, 2],
+          [-1, 0, 1]
+        ]
+      },
+      {
+        "input": {
+          "nums": []
+        },
+        "output": []
+      },
+      {
+        "input": {
+          "nums": [0]
+        },
+        "output": []
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "nums": [0, 0, 0, 0]
+        },
+        "output": [
+          [0, 0, 0]
+        ]
+      },
+      {
+        "input": {
+          "nums": [-2, 0, 1, 1, 2]
+        },
+        "output": [
+          [-2, 0, 2],
+          [-2, 1, 1]
+        ]
+      },
+      {
+        "input": {
+          "nums": [-4, -1, -1, 0, 1, 2]
+        },
+        "output": [
+          [-1, -1, 2],
+          [-1, 0, 1]
+        ]
+      }
+    ],
+    "constraints": {
+      "time_ms": 2000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Initialize a list to store the results.\nSort the input array nums. Sorting is crucial for the two-pointer approach and for handling duplicates.\nIterate through the array with a for loop, using index i. Stop the loop two elements from the end.\nInside the loop, check for and skip duplicate elements for the i-th position to avoid duplicate triplets.\nFor each i, initialize a left pointer to i + 1 and a right pointer to the end of the array.\nStart a while loop that runs as long as left < right.\nCalculate the current_sum of elements at i, left, and right.\nIf current_sum is less than zero, increment left.\nIf current_sum is greater than zero, decrement right.\nIf current_sum is zero, you've found a triplet. Add it to the results.\nAfter finding a valid triplet, increment left and decrement right. Also, add logic to skip any duplicate elements at the left and right pointers.\nReturn the list of results.",
+    "hint_templates": [
+      {
+        "nudge": "A brute force O(n^3) solution is too slow. How can you improve this if you fix one number and search for the other two?"
+      },
+      {
+        "guide": "This problem can be reduced to a 'Two Sum' problem. If you sort the array first, you can iterate through it, and for each element nums[i], find two other elements that sum to -nums[i] using a more efficient method than a nested loop. The sorted array is key."
+      },
+      {
+        "direction": "Sort the input array. Then, loop through the array with index i. For each i, use two pointers, left = i + 1 and right = len(nums) - 1. Move these pointers inward based on whether their sum is too small or too large. If you find a sum of zero, add the triplet to your results. A critical part is skipping duplicate values for i, left, and right to ensure unique triplets."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 300,
+      "p25_s": 180,
+      "p75_s": 600
+    },
+    "prerequisites": [
+      "arrays",
+      "sorting",
+      "two-pointers",
+      "dsa-easy-001"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "handles_duplicates",
+          "points": 30
+        },
+        {
+          "component": "time_complexity_0(n^2)",
+          "points": 20
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution that first sorts the array, then uses a primary loop and a two-pointer sub-routine. Time complexity is dominated by the sort, O(n log n), plus the O(n^2) nested loops, resulting in O(n^2). Space complexity is O(1) or O(n) depending on the space used by the sorting algorithm.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Sort the input array.",
+        "pseudocode": "nums.sort()",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Initialize the results list.",
+        "pseudocode": "result = []",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Loop through the array for the first element of the triplet.",
+        "pseudocode": "for i in range(len(nums) - 2):",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Skip duplicate first elements.",
+        "pseudocode": "if i > 0 and nums[i] == nums[i-1]: continue",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Initialize two pointers.",
+        "pseudocode": "left, right = i + 1, len(nums) - 1",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "Loop with the two pointers.",
+        "pseudocode": "while left < right:",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Calculate the sum.",
+        "pseudocode": "total = nums[i] + nums[left] + nums[right]",
+        "test_exs": []
+      },
+      {
+        "id": "s8",
+        "description": "Adjust pointers based on the sum.",
+        "pseudocode": "if total < 0: left += 1\nelif total > 0: right -= 1",
+        "test_exs": []
+      },
+      {
+        "id": "s9",
+        "description": "Handle the case where a triplet is found.",
+        "pseudocode": "else:\n result.append([nums[i], nums[left], nums[right]])",
+        "test_exs": []
+      },
+      {
+        "id": "s10",
+        "description": "Skip duplicates for the second and third elements.",
+        "pseudocode": "while left < right and nums[left] == nums[left + 1]: left += 1\n while left < right and nums[right] == nums[right - 1]: right -= 1",
+        "test_exs": []
+      },
+      {
+        "id": "s11",
+        "description": "Move pointers after finding a triplet.",
+        "pseudocode": "left += 1\n right -= 1",
+        "test_exs": []
+      },
+      {
+        "id": "s12",
+        "description": "Return the final list.",
+        "pseudocode": "return result",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Array with fewer than 3 elements.",
+      "Array with all same elements (e.g., all zeros).",
+      "No triplets sum to zero.",
+      "Array contains many duplicates."
+    ],
+    "learning_objectives": [
+      "two-pointers_on_sorted_array",
+      "duplicate_handling",
+      "reducing_problem_complexity"
+    ],
+    "related_problems": [
+      "dsa-easy-001",
+      "dsa-medium-005"
+    ]
+  },
+  {
+    "id": "dsa-medium-002",
+    "title": "Kth Smallest Element in a BST",
+    "Full_question": "Given the root of a binary search tree, and an integer k, return the kth smallest value (1-indexed) of all the values of the nodes in the tree.",
+    "short_description": "Find the kth smallest element in a Binary Search Tree.",
+    "difficulty": {
+      "numeric": 5,
+      "label": "medium"
+    },
+    "concepts": [
+      "tree",
+      "binary-search-tree",
+      "in-order-traversal",
+      "depth-first-search"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "root": [3, 1, 4, null, 2],
+          "k": 1
+        },
+        "output": 1
+      },
+      {
+        "input": {
+          "root": [5, 3, 6, 2, 4, null, null, 1],
+          "k": 3
+        },
+        "output": 3
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "root": [1],
+          "k": 1
+        },
+        "output": 1
+      },
+      {
+        "input": {
+          "root": [2, 1],
+          "k": 2
+        },
+        "output": 2
+      },
+      {
+        "input": {
+          "root": [4, 2, 5, 1, 3],
+          "k": 5
+        },
+        "output": 5
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "The key property of a BST is that an in-order traversal visits nodes in ascending order.\nPerform an in-order traversal of the BST.\nThis can be done recursively or iteratively (using a stack).\nDuring the traversal, keep a counter.\nWhen visiting a node (in the in-order sense, i.e., after visiting its left subtree), decrement the counter k.\nWhen k becomes 0, the current node's value is the kth smallest element. Return this value.",
+    "hint_templates": [
+      {
+        "nudge": "What is the relationship between the structure of a Binary Search Tree and the sorted order of its elements?"
+      },
+      {
+        "guide": "An in-order traversal (Left, Root, Right) of a BST visits the nodes in sorted, ascending order. How can you leverage this traversal to find the kth element?"
+      },
+      {
+        "direction": "Use an iterative in-order traversal with a stack. While the current node is not null or the stack is not empty, push all left children onto the stack. Then, pop a node from the stack, decrement k. If k is now 0, you've found your element. Then, move to the right child of the popped node."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 150,
+      "p25_s": 90,
+      "p75_s": 300
+    },
+    "prerequisites": [
+      "binary-trees",
+      "binary-search-trees",
+      "tree-traversal",
+      "stacks"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 60
+        },
+        {
+          "component": "bst_property_usage",
+          "points": 40
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using an iterative in-order traversal with a stack. This has a time complexity of O(H + k), where H is the height of the tree, as it might not traverse the entire tree. The space complexity is O(H) for the stack.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize an empty stack and set the current node to the root.",
+        "pseudocode": "stack = []\ncurr = root",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Start a loop that continues as long as there's a current node or the stack is not empty.",
+        "pseudocode": "while curr or stack:",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Traverse to the leftmost node, pushing nodes onto the stack.",
+        "pseudocode": "while curr:\n stack.append(curr)\n curr = curr.left",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Pop the last node. This is the next smallest element.",
+        "pseudocode": "curr = stack.pop()",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Decrement k. If it's zero, we've found our answer.",
+        "pseudocode": "k -= 1\nif k == 0:\n return curr.val",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "Move to the right subtree to continue the in-order traversal.",
+        "pseudocode": "curr = curr.right",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "k is 1 (the smallest element).",
+      "k is equal to the number of nodes (the largest element).",
+      "A skewed tree."
+    ],
+    "learning_objectives": [
+      "in-order-traversal",
+      "binary-search-tree_properties",
+      "iterative_tree_traversal"
+    ],
+    "related_problems": [
+      "dsa-easy-006"
+    ]
+  },
+  {
+    "id": "dsa-medium-003",
+    "title": "Longest Palindromic Substring",
+    "Full_question": "Given a string s, return the longest palindromic substring in s.",
+    "short_description": "Find the longest substring which is a palindrome.",
+    "difficulty": {
+      "numeric": 6,
+      "label": "medium"
+    },
+    "concepts": [
+      "string",
+      "dynamic-programming",
+      "two-pointers"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "s": "babad"
+        },
+        "output": "bab",
+        "explanation": "'aba' is also a valid answer."
+      },
+      {
+        "input": {
+          "s": "cbbd"
+        },
+        "output": "bb"
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "s": "a"
+        },
+        "output": "a"
+      },
+      {
+        "input": {
+          "s": "ac"
+        },
+        "output": "a"
+      },
+      {
+        "input": {
+          "s": "racecar"
+        },
+        "output": "racecar"
+      }
+    ],
+    "constraints": {
+      "time_ms": 3000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Handle base cases where the string is empty or already a palindrome.\nInitialize variables to store the starting index and length of the longest palindrome found so far.\nIterate through each character of the string, considering it as a potential center of a palindrome.\nFor each character i, check for two types of palindromes:\na. An odd-length palindrome centered at i.\nb. An even-length palindrome centered between i and i+1.\nCreate a helper function expand_from_center(left, right) that takes two pointers, expands them outwards as long as they are in bounds and the characters match. It should return the length of the palindrome found.\nIn the main loop, call this helper for both the odd and even cases.\nCompare the lengths returned by the helper with the current max length. If a longer palindrome is found, update the start index and max length.\nAfter the loop, return the substring using the stored start index and length.",
+    "hint_templates": [
+      {
+        "nudge": "A palindrome reads the same forwards and backwards. This means it is symmetric around its center. What if you considered every possible center for a palindrome?"
+      },
+      {
+        "guide": "You can iterate through the string and, for each character, 'expand outwards' to find the longest palindrome centered at that character. Remember that a center can be a single character (for odd-length palindromes) or the space between two characters (for even-length ones)."
+      },
+      {
+        "direction": "Loop from i = 0 to len(s)-1. Inside the loop, find the length of the palindrome centered at i (e.g., expand(i, i)) and the length of the palindrome centered at i and i+1 (e.g., expand(i, i+1)). Keep track of the start index and length of the longest one you've found so far. The expand function will use a while loop with two pointers moving outwards."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 250,
+      "p25_s": 150,
+      "p75_s": 500
+    },
+    "prerequisites": [
+      "strings",
+      "two-pointers",
+      "dsa-easy-002"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "handles_odd_and_even_lengths",
+          "points": 30
+        },
+        {
+          "component": "time_complexity_0(n^2)",
+          "points": 20
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using the 'expand from center' approach. This method has a time complexity of O(n^2) because for each of the n characters, we might expand up to n/2 times. The space complexity is O(1).",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize variables to track the start and end of the longest palindrome.",
+        "pseudocode": "start = 0\nend = 0",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Loop through each character to use as a potential center.",
+        "pseudocode": "for i in range(len(s)):",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Check for odd-length palindromes centered at i.",
+        "pseudocode": "len1 = expand_from_center(s, i, i)",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Check for even-length palindromes centered between i and i+1.",
+        "pseudocode": "len2 = expand_from_center(s, i, i + 1)",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Find the maximum of the two lengths.",
+        "pseudocode": "length = max(len1, len2)",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If a new longest palindrome is found, update start and end.",
+        "pseudocode": "if length > end - start:\n start = i - (length - 1) // 2\n end = i + length // 2",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Return the final substring.",
+        "pseudocode": "return s[start:end+1]",
+        "test_exs": []
+      },
+      {
+        "id": "s8",
+        "description": "Implement the helper function 'expand_from_center'.",
+        "pseudocode": "function expand_from_center(s, left, right):\n while left >= 0 and right < len(s) and s[left] == s[right]:\n left -= 1\n right += 1\n return right - left - 1",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Single character string.",
+      "String that is already a palindrome.",
+      "String with no palindromic substrings longer than 1."
+    ],
+    "learning_objectives": [
+      "expand_from_center_pattern",
+      "handling_multiple_cases_in_loops"
+    ],
+    "related_problems": [
+      "dsa-easy-002"
+    ]
+  },
+  {
+    "id": "dsa-medium-004",
+    "title": "Product of Array Except Self",
+    "Full_question": "Given an integer array nums, return an array answer such that answer[i] is equal to the product of all the elements of nums except nums[i]. The product of any prefix or suffix of nums is guaranteed to fit in a 32-bit integer. You must write an algorithm that runs in O(n) time and without using the division operation.",
+    "short_description": "Calculate the product of all elements in an array except the element at the current index, without using division.",
+    "difficulty": {
+      "numeric": 5,
+      "label": "medium"
+    },
+    "concepts": [
+      "array",
+      "prefix-sum",
+      "suffix-product"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "nums": [1, 2, 3, 4]
+        },
+        "output": [24, 12, 8, 6]
+      },
+      {
+        "input": {
+          "nums": [-1, 1, 0, -3, 3]
+        },
+        "output": [0, 0, 9, 0, 0]
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "nums": [0, 0]
+        },
+        "output": [0, 0]
+      },
+      {
+        "input": {
+          "nums": [1, 0]
+        },
+        "output": [0, 1]
+      },
+      {
+        "input": {
+          "nums": [5, 2]
+        },
+        "output": [2, 5]
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": ["/"]
+    },
+    "canonical_skeleton": "The product at index i is the product of all elements to its left times the product of all elements to its right.\nInitialize an answer array, answer, of the same size as nums, with all values as 1.\nCreate a variable prefix_product, initialized to 1.\nIterate through nums from left to right. For each index i, set answer[i] to the current prefix_product, and then update prefix_product by multiplying it with nums[i].\nAfter this loop, answer[i] holds the product of all elements to the left of i.\nCreate a variable suffix_product, initialized to 1.\nIterate through nums from right to left. For each index i, multiply answer[i] by the current suffix_product, and then update suffix_product by multiplying it with nums[i].\nReturn the answer array.",
+    "hint_templates": [
+      {
+        "nudge": "You can't use division. The value at answer[i] is (product of numbers to the left of i) times (product of numbers to the right of i). Can you compute these two parts separately?"
+      },
+      {
+        "guide": "Try to solve this in two passes. In the first pass (left-to-right), calculate the prefix products for each position. In the second pass (right-to-left), calculate the suffix products and multiply them with the corresponding prefix products."
+      },
+      {
+        "direction": "Create a result array. First, loop from left-to-right, populating result[i] with the product of all numbers before i. You'll need a variable to keep track of this running product. Then, loop from right-to-left. You'll need another variable for the running product of numbers after i. In this second loop, multiply result[i] by this running suffix product."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 120,
+      "p25_s": 80,
+      "p75_s": 240
+    },
+    "prerequisites": [
+      "arrays"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "no_division_used",
+          "points": 20
+        },
+        {
+          "component": "O(n)_time_O(1)_space",
+          "points": 30
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution that uses two passes to first calculate prefix products and then incorporate suffix products. This achieves O(n) time complexity. The space complexity is O(1) if the output array is not counted as extra space.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize an answer array of the same length with 1s.",
+        "pseudocode": "n = len(nums)\nanswer = [1] * n",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "First pass: Calculate prefix products.",
+        "pseudocode": "prefix = 1\nfor i in range(n):\n answer[i] = prefix\n prefix *= nums[i]",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Second pass: Calculate suffix products and combine.",
+        "pseudocode": "suffix = 1\nfor i in range(n - 1, -1, -1):\n answer[i] *= suffix\n suffix *= nums[i]",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Return the final answer array.",
+        "pseudocode": "return answer",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Array contains one or more zeros.",
+      "Array contains negative numbers.",
+      "Array with only two elements."
+    ],
+    "learning_objectives": [
+      "prefix-sum_pattern",
+      "two-pass_algorithms",
+      "space_optimization"
+    ],
+    "related_problems": [
+      "dsa-easy-003"
+    ]
+  },
+  {
+    "id": "dsa-medium-005",
+    "title": "Group Anagrams",
+    "Full_question": "Given an array of strings strs, group the anagrams together. You can return the answer in any order. An Anagram is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
+    "short_description": "Group an array of strings into sub-arrays of anagrams.",
+    "difficulty": {
+      "numeric": 5,
+      "label": "medium"
+    },
+    "concepts": [
+      "array",
+      "string",
+      "hashing"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "strs": ["eat", "tea", "tan", "ate", "nat", "bat"]
+        },
+        "output": [
+          ["bat"],
+          ["nat", "tan"],
+          ["ate", "eat", "tea"]
+        ]
+      },
+      {
+        "input": {
+          "strs": [""]
+        },
+        "output": [
+          [""]
+        ]
+      },
+      {
+        "input": {
+          "strs": ["a"]
+        },
+        "output": [
+          ["a"]
+        ]
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "strs": ["abc", "acb", "bac", "bca", "cab", "cba"]
+        },
+        "output": [
+          ["abc", "acb", "bac", "bca", "cab", "cba"]
+        ]
+      },
+      {
+        "input": {
+          "strs": ["", "b", ""]
+        },
+        "output": [
+          ["", ""],
+          ["b"]
+        ]
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Anagrams have a common property: when their letters are sorted, the resulting string is identical. This sorted string can be used as a key.\nInitialize a hash map where keys will be the sorted representation of a string and values will be lists of anagrams.\nIterate through each string in the input array strs.\nFor each string, create its canonical key. A good key is the string formed by sorting its characters.\nUse this key to access the hash map. If the key doesn't exist, create a new list for it.\nAppend the original string to the list associated with its key.\nAfter iterating through all strings, the values of the hash map are the groups of anagrams.\nReturn a list of these values.",
+    "hint_templates": [
+      {
+        "nudge": "What is a property that all anagrams share? How can you represent a group of anagrams with a single, unique key?"
+      },
+      {
+        "guide": "If you sort the letters of two strings that are anagrams, you get the exact same result. You can use this sorted string as a key in a hash map to group the original strings."
+      },
+      {
+        "direction": "Create a dictionary. Loop through each word in the input list. Inside the loop, create a key by sorting the word (e.g., key = ''.join(sorted(word))). Then, add the original word to the list at dictionary[key]. Finally, return the values of the dictionary."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 100,
+      "p25_s": 70,
+      "p75_s": 200
+    },
+    "prerequisites": [
+      "strings",
+      "hashmaps",
+      "sorting",
+      "dsa-easy-005"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 60
+        },
+        {
+          "component": "use_of_hashing",
+          "points": 20
+        },
+        {
+          "component": "time_complexity",
+          "points": 20
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using a dictionary. The key is the sorted version of a string. The time complexity is O(N * K log K), where N is the number of strings and K is the maximum length of a string, due to sorting each string. The space complexity is O(N * K) to store the hash map.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize a hash map (dictionary).",
+        "pseudocode": "anagram_map = defaultdict(list)",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Iterate through each string in the input list.",
+        "pseudocode": "for s in strs:",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Create a canonical key by sorting the string's characters.",
+        "pseudocode": "key = tuple(sorted(s))",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Append the original string to the list associated with the key.",
+        "pseudocode": "anagram_map[key].append(s)",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Return the values of the hash map.",
+        "pseudocode": "return list(anagram_map.values())",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "List of empty strings.",
+      "List containing strings of different lengths.",
+      "All strings are unique (no anagrams)."
+    ],
+    "learning_objectives": [
+      "hashing_with_computed_keys",
+      "grouping_data_with_hashmaps"
+    ],
+    "related_problems": [
+      "dsa-easy-005",
+      "dsa-easy-001"
+    ]
+  },
+  {
+    "id": "dsa-medium-006",
+    "title": "Number of Islands",
+    "Full_question": "Given an m x n 2D binary grid grid which represents a map of '1's (land) and '0's (water), return the number of islands. An island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically. You may assume all four edges of the grid are all surrounded by water.",
+    "short_description": "Count the number of distinct islands in a 2D grid.",
+    "difficulty": {
+      "numeric": 6,
+      "label": "medium"
+    },
+    "concepts": [
+      "matrix",
+      "graph",
+      "depth-first-search",
+      "breadth-first-search"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "grid": [
+            ["1", "1", "1", "1", "0"],
+            ["1", "1", "0", "1", "0"],
+            ["1", "1", "0", "0", "0"],
+            ["0", "0", "0", "0", "0"]
+          ]
+        },
+        "output": 1
+      },
+      {
+        "input": {
+          "grid": [
+            ["1", "1", "0", "0", "0"],
+            ["1", "1", "0", "0", "0"],
+            ["0", "0", "1", "0", "0"],
+            ["0", "0", "0", "1", "1"]
+          ]
+        },
+        "output": 3
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "grid": [
+            ["1"]
+          ]
+        },
+        "output": 1
+      },
+      {
+        "input": {
+          "grid": [
+            ["0"]
+          ]
+        },
+        "output": 0
+      },
+      {
+        "input": {
+          "grid": [
+            ["1", "0", "1", "0", "1"]
+          ]
+        },
+        "output": 3
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "Initialize an island_count to 0.\nIterate through every cell of the grid using nested loops (for row r and column c).\nIf a cell (r, c) contains a '1' (land), it's the start of a new island.\nIncrement island_count.\nStart a traversal (either DFS or BFS) from this cell (r, c) to find all connected land parts of this island.\nDuring the traversal, \"sink\" the island by changing all its '1's to '0's (or another marker) to ensure they are not counted again.\nThe traversal function (e.g., dfs(r, c)) should:\na. Check for boundary conditions (out of bounds) or if the cell is water ('0').\nb. If it's a valid land cell, change its value to '0'.\nc. Recursively call itself for all 4 adjacent neighbors (up, down, left, right).\nAfter the nested loops complete, return island_count.",
+    "hint_templates": [
+      {
+        "nudge": "You need to count connected groups of '1's. How can you explore a whole group once you find the first piece of it?"
+      },
+      {
+        "guide": "Iterate through the grid. When you find a '1', you've found a new island. Now, you need to find all the parts of this same island and mark them as visited so you don't count them again. A graph traversal algorithm like Depth-First Search (DFS) or Breadth-First Search (BFS) is perfect for this."
+      },
+      {
+        "direction": "Write a main function that loops through r and c. If grid[r][c] == '1', increment a counter and call a dfs(r, c) function. The dfs function should first check boundaries. If the cell is '1', change it to '0' to mark it visited, and then recursively call dfs for its four neighbors: (r+1, c), (r-1, c), (r, c+1), and (r, c-1)."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 180,
+      "p25_s": 120,
+      "p75_s": 400
+    },
+    "prerequisites": [
+      "matrix-traversal",
+      "graphs",
+      "recursion",
+      "dfs",
+      "bfs"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "graph_traversal_implementation",
+          "points": 30
+        },
+        {
+          "component": "avoids_recounting",
+          "points": 20
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution that iterates through the grid and uses a recursive DFS helper function to sink islands. The time complexity is O(M*N), where M and N are the dimensions of the grid, as each cell is visited at most twice. The space complexity is O(M*N) in the worst case for the recursion stack (for a grid full of land).",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize island count.",
+        "pseudocode": "count = 0",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Get grid dimensions.",
+        "pseudocode": "rows, cols = len(grid), len(grid[0])",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Loop through each cell of the grid.",
+        "pseudocode": "for r in range(rows):\n for c in range(cols):",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "If a '1' is found, increment count and start DFS.",
+        "pseudocode": "if grid[r][c] == '1':\n count += 1\n dfs(grid, r, c)",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Return the final count.",
+        "pseudocode": "return count",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "Implement the DFS helper function.",
+        "pseudocode": "function dfs(grid, r, c):\n if r < 0 or c < 0 or r >= len(grid) or c >= len(grid[0]) or grid[r][c] == '0':\n return",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "In DFS, 'sink' the current cell.",
+        "pseudocode": "grid[r][c] = '0'",
+        "test_exs": []
+      },
+      {
+        "id": "s8",
+        "description": "In DFS, make recursive calls to neighbors.",
+        "pseudocode": "dfs(grid, r + 1, c)\ndfs(grid, r - 1, c)\ndfs(grid, r, c + 1)\ndfs(grid, r, c - 1)",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Empty grid.",
+      "Grid with no land.",
+      "Grid that is all land.",
+      "Grid with a single row or column."
+    ],
+    "learning_objectives": [
+      "graph_traversal_on_implicit_graphs",
+      "dfs_vs_bfs",
+      "modifying_input_for_state"
+    ],
+    "related_problems": []
+  },
+  {
+    "id": "dsa-hard-001",
+    "title": "Merge k Sorted Lists",
+    "Full_question": "You are given an array of k linked-lists lists, where each linked-list is sorted in ascending order. Merge all the linked-lists into one sorted linked-list and return it.",
+    "short_description": "Merge k sorted linked lists into a single sorted linked list.",
+    "difficulty": {
+      "numeric": 8,
+      "label": "hard"
+    },
+    "concepts": [
+      "linked-list",
+      "heap",
+      "priority-queue",
+      "divide-and-conquer"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "lists": [
+            [1, 4, 5],
+            [1, 3, 4],
+            [2, 6]
+          ]
+        },
+        "output": [1, 1, 2, 3, 4, 4, 5, 6]
+      },
+      {
+        "input": {
+          "lists": []
+        },
+        "output": []
+      },
+      {
+        "input": {
+          "lists": [
+            []
+          ]
+        },
+        "output": []
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "lists": [
+            [],
+            [-1, 5, 11],
+            [],
+            [6, 10]
+          ]
+        },
+        "output": [-1, 5, 6, 10, 11]
+      },
+      {
+        "input": {
+          "lists": [
+            [1],
+            [0]
+          ]
+        },
+        "output": [0, 1]
+      }
+    ],
+    "constraints": {
+      "time_ms": 2000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard", "heapq"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "The challenge is to efficiently find the smallest node among all the current heads of the k lists. A min-heap (priority queue) is the ideal data structure for this.\nCreate a min-heap to store tuples of (value, node_id, node), where node_id is needed to break ties.\nInitialize the heap by pushing the head node of each non-empty list.\nCreate a dummy head node for the result list and a current pointer to build the new list.\nLoop while the min-heap is not empty:\na. Pop the element with the smallest value from the heap. This is the next node in the sorted list.\nb. Append this node to the result list by setting current.next and advancing current.\nc. If the popped node has a next node, push that next node into the heap.\nReturn dummy.next, which is the head of the merged list.",
+    "hint_templates": [
+      {
+        "nudge": "At each step of building the final list, you need to append the smallest of all the available nodes. What data structure is highly efficient at repeatedly finding the minimum element from a collection?"
+      },
+      {
+        "guide": "A min-heap can maintain the current head of all k lists. At each step, you can extract the minimum node in O(log k) time. After extracting, if that node's list is not empty, you add the next node from that list back into the heap."
+      },
+      {
+        "direction": "Initialize a priority queue and add the head of each of the k lists to it (if not null). Create a dummy node for your result list. While the priority queue is not empty, pop the smallest node, append it to your result, and if that node has a next element, add that next element back into the priority queue. Finally, return the next of the dummy node."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 400,
+      "p25_s": 250,
+      "p75_s": 700
+    },
+    "prerequisites": [
+      "linked-lists",
+      "heaps",
+      "priority-queues"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "efficient_use_of_heap",
+          "points": 30
+        },
+        {
+          "component": "edge_case_handling",
+          "points": 20
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using the heapq module to implement a min-heap. The time complexity is O(N log k) where N is the total number of nodes and k is the number of lists. This is because each of the N nodes is pushed and popped from the heap once, at a cost of O(log k). The space complexity is O(k) for storing at most k nodes in the heap.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize a min-heap and a dummy head for the result list.",
+        "pseudocode": "heap = []\ndummy = ListNode()\ncurrent = dummy",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Add the head of each non-empty list to the heap.",
+        "pseudocode": "for i, head in enumerate(lists):\n if head:\n heapq.heappush(heap, (head.val, i, head))",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Loop as long as the heap contains elements.",
+        "pseudocode": "while heap:",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Pop the node with the smallest value.",
+        "pseudocode": "val, i, node = heapq.heappop(heap)",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Append this node to the merged list.",
+        "pseudocode": "current.next = node\ncurrent = current.next",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If the popped node has a next element, add it to the heap.",
+        "pseudocode": "if node.next:\n heapq.heappush(heap, (node.next.val, i, node.next))",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Return the head of the merged list.",
+        "pseudocode": "return dummy.next",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "The input list of lists is empty.",
+      "The input contains empty lists.",
+      "The input contains lists with only one node."
+    ],
+    "learning_objectives": [
+      "heap_for_k-way_merge",
+      "priority_queue_applications",
+      "handling_custom_objects_in_heaps"
+    ],
+    "related_problems": [
+      "dsa-easy-merge-two-sorted-lists"
+    ]
+  },
+  {
+    "id": "dsa-hard-002",
+    "title": "Longest Valid Parentheses",
+    "Full_question": "Given a string containing just the characters '(' and ')', find the length of the longest valid (well-formed) parentheses substring.",
+    "short_description": "Find the length of the longest valid parentheses substring.",
+    "difficulty": {
+      "numeric": 8,
+      "label": "hard"
+    },
+    "concepts": [
+      "string",
+      "stack",
+      "dynamic-programming"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "s": "(()"
+        },
+        "output": 2,
+        "explanation": "The longest valid parentheses substring is '()'."
+      },
+      {
+        "input": {
+          "s": ")()())"
+        },
+        "output": 4,
+        "explanation": "The longest valid parentheses substring is '()()'."
+      },
+      {
+        "input": {
+          "s": ""
+        },
+        "output": 0
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "s": "()(()"
+        },
+        "output": 2
+      },
+      {
+        "input": {
+          "s": "()(())"
+        },
+        "output": 6
+      },
+      {
+        "input": {
+          "s": "((()))())"
+        },
+        "output": 8
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "This problem can be solved efficiently using a stack that stores indices.\nInitialize a stack and push an index of -1 onto it. This initial value will act as a base to calculate the length of a valid substring that starts from index 0.\nInitialize a variable max_length to 0.\nIterate through the input string s with index i.\nIf the character s[i] is an opening parenthesis '(', push its index i onto the stack.\nIf the character s[i] is a closing parenthesis ')':\na. Pop from the stack.\nb. If the stack becomes empty after popping, it means the current ')' is unmatched. Push the current index i onto the stack to serve as the new base for future length calculations.\nc. If the stack is not empty, the current ')' has found a match. The length of the valid substring ending at i is the difference between i and the index at the new top of the stack. Update max_length with max(max_length, i - stack.top()).\nReturn max_length.",
+    "hint_templates": [
+      {
+        "nudge": "A stack is great for checking parenthesis validity. Instead of storing the characters themselves, what if you stored their positions? How could that help you calculate lengths?"
+      },
+      {
+        "guide": "Use a stack to store the indices of open parentheses. When you see a closing parenthesis, you pop, indicating a matched pair. The length of the valid string ending at the current position can be calculated by looking at the current index and the index of the element now at the top of the stack."
+      },
+      {
+        "direction": "Start by pushing -1 onto a stack. Iterate through the string. If you see '(', push its index. If you see ')', pop. If the stack is now empty, it means the ')' has no match, so push the current index as a new 'boundary'. If the stack is not empty, the length of the valid substring is current_index - stack.top(). Keep track of the maximum length found."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 350,
+      "p25_s": 200,
+      "p75_s": 600
+    },
+    "prerequisites": [
+      "stacks",
+      "string-manipulation",
+      "dsa-easy-valid-parentheses"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 60
+        },
+        {
+          "component": "stack_logic_with_indices",
+          "points": 30
+        },
+        {
+          "component": "edge_case_handling",
+          "points": 10
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using a stack to store indices. The time complexity is O(n) because we iterate through the string once. The space complexity is O(n) for the stack in the worst case (a string of all opening parentheses).",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize max_length to 0 and a stack with a -1 base index.",
+        "pseudocode": "max_len = 0\nstack = [-1]",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Iterate through the string with index i.",
+        "pseudocode": "for i, char in enumerate(s):",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "If it's an opening paren, push its index.",
+        "pseudocode": "if char == '(': stack.append(i)",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "If it's a closing paren, pop from the stack.",
+        "pseudocode": "else: stack.pop()",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "After popping, check if the stack is empty.",
+        "pseudocode": "if not stack:\n stack.append(i)",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If not empty, calculate length and update max.",
+        "pseudocode": "else:\n max_len = max(max_len, i - stack[-1])",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Return the final max_length.",
+        "pseudocode": "return max_len",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Empty string.",
+      "String with no valid parentheses (e.g., '(((' or ')))').",
+      "A valid string at the beginning or end of a longer string."
+    ],
+    "learning_objectives": [
+      "advanced_stack_usage",
+      "using_indices_in_stacks_for_measurements"
+    ],
+    "related_problems": [
+      "dsa-easy-valid-parentheses"
+    ]
+  },
+  {
+    "id": "dsa-hard-003",
+    "title": "Trapping Rain Water",
+    "Full_question": "Given n non-negative integers representing an elevation map where the width of each bar is 1, compute how much water it can trap after raining.",
+    "short_description": "Calculate the amount of water that can be trapped between bars of varying heights.",
+    "difficulty": {
+      "numeric": 8,
+      "label": "hard"
+    },
+    "concepts": [
+      "array",
+      "two-pointers",
+      "stack",
+      "dynamic-programming"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "height": [0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]
+        },
+        "output": 6
+      },
+      {
+        "input": {
+          "height": [4, 2, 0, 3, 2, 5]
+        },
+        "output": 9
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "height": [1]
+        },
+        "output": 0
+      },
+      {
+        "input": {
+          "height": [5, 4, 3, 2, 1]
+        },
+        "output": 0
+      },
+      {
+        "input": {
+          "height": [0, 10, 0, 10, 0]
+        },
+        "output": 10
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "The amount of water trapped above any bar is determined by min(tallest_bar_to_the_left, tallest_bar_to_the_right) - current_bar_height.\nAn O(1) space solution uses a two-pointer approach.\nInitialize left and right pointers at the start and end of the array.\nInitialize left_max and right_max to 0, representing the tallest bars seen so far from each side.\nInitialize total_water to 0.\nLoop while left < right:\na. Compare height[left] and height[right].\nb. If height[left] is smaller, the water level is constrained by the left side.\ni. If height[left] is greater than left_max, update left_max. No water is trapped here.\nii. Else, water trapped is left_max - height[left]. Add this to total_water.\niii. Move the left pointer one step to the right.\nc. Else (if height[right] is smaller or equal), the water level is constrained by the right side.\ni. If height[right] is greater than right_max, update right_max.\nii. Else, add right_max - height[right] to total_water.\niii. Move the right pointer one step to the left.\nReturn total_water.",
+    "hint_templates": [
+      {
+        "nudge": "The water at any point is limited by the walls around it. For any bar i, the water it can hold depends on the maximum height to its left and the maximum height to its right."
+      },
+      {
+        "guide": "A simple approach is to create two arrays, one storing the max height to the left of each index, and another for the right. Then iterate and calculate the trapped water. Can you do this without the extra O(n) space?"
+      },
+      {
+        "direction": "Use two pointers, left and right, at the ends of the array, and keep track of left_max and right_max. If height[left] is less than height[right], you can be sure that the maximum water level at the left position is determined by left_max, because there's a taller wall (height[right]) somewhere on the right. Calculate the water at left and move the pointer. Do the symmetric operation if height[right] is smaller."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 450,
+      "p25_s": 300,
+      "p75_s": 800
+    },
+    "prerequisites": [
+      "arrays",
+      "two-pointers"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "O(n)_time_and_O(1)_space_solution",
+          "points": 40
+        },
+        {
+          "component": "edge_case_handling",
+          "points": 10
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using the two-pointer approach. This achieves O(n) time complexity as the pointers traverse the array once, and O(1) space complexity as it only uses a few variables for storage.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize left/right pointers and max height variables.",
+        "pseudocode": "left, right = 0, len(height) - 1\nleft_max, right_max = 0, 0\ntotal_water = 0",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Loop until the pointers meet.",
+        "pseudocode": "while left < right:",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Check if the left bar is shorter than the right bar.",
+        "pseudocode": "if height[left] < height[right]:",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Process the left side: update max or add water.",
+        "pseudocode": "if height[left] >= left_max: left_max = height[left]\nelse: total_water += left_max - height[left]\nleft += 1",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Process the right side if it's shorter or equal.",
+        "pseudocode": "else:",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "Process the right side: update max or add water.",
+        "pseudocode": "if height[right] >= right_max: right_max = height[right]\nelse: total_water += right_max - height[right]\nright -= 1",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Return the total accumulated water.",
+        "pseudocode": "return total_water",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "Array with less than 3 elements.",
+      "Heights are strictly increasing or decreasing.",
+      "Heights form a 'V' shape."
+    ],
+    "learning_objectives": [
+      "advanced_two-pointer_technique",
+      "space_optimization",
+      "problem_visualization"
+    ],
+    "related_problems": [
+      "dsa-medium-container-with-most-water"
+    ]
+  },
+  {
+    "id": "dsa-hard-004",
+    "title": "Median of Two Sorted Arrays",
+    "Full_question": "Given two sorted arrays nums1 and nums2 of size m and n respectively, return the median of the two sorted arrays. The overall run time complexity should be O(log (m+n)).",
+    "short_description": "Find the median of two sorted arrays in logarithmic time.",
+    "difficulty": {
+      "numeric": 9,
+      "label": "hard"
+    },
+    "concepts": [
+      "array",
+      "binary-search",
+      "divide-and-conquer"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "nums1": [1, 3],
+          "nums2": [2]
+        },
+        "output": 2.0
+      },
+      {
+        "input": {
+          "nums1": [1, 2],
+          "nums2": [3, 4]
+        },
+        "output": 2.5
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "nums1": [],
+          "nums2": [1]
+        },
+        "output": 1.0
+      },
+      {
+        "input": {
+          "nums1": [2],
+          "nums2": []
+        },
+        "output": 2.0
+      },
+      {
+        "input": {
+          "nums1": [1, 3, 8, 9, 15],
+          "nums2": [7, 11, 18, 19, 21, 25]
+        },
+        "output": 10.0
+      }
+    ],
+    "constraints": {
+      "time_ms": 1000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "The problem requires a logarithmic time solution, which strongly implies binary search. We will binary search for the correct partition point in the smaller array.\nEnsure nums1 is the smaller array to optimize the search space.\nThe goal is to find a partition partitionX in nums1 and partitionY in nums2 such that every element in the combined left partition is less than or equal to every element in the combined right partition.\nStart a binary search on nums1 (low = 0, high = m).\nIn each step, pick a partitionX. Calculate the corresponding partitionY based on the total number of elements.\nIdentify the four boundary elements: maxLeftX, minRightX, maxLeftY, minRightY.\nHandle edge cases where a partition is at the beginning or end of an array.\nCheck if the partition is correct: maxLeftX <= minRightY AND maxLeftY <= minRightX.\nIf it is correct, calculate the median based on whether the total length is even or odd.\nIf maxLeftX > minRightY, the partition in nums1 is too large; move the search to the left half.\nIf maxLeftY > minRightX, the partition in nums1 is too small; move the search to the right half.",
+    "hint_templates": [
+      {
+        "nudge": "To achieve O(log(m+n)), a linear scan is too slow. This suggests binary search. But what are you searching for? You're not searching for a value, but for a correct position."
+      },
+      {
+        "guide": "The median divides a set into two equal halves. Try to find a partition in both arrays that divides the combined set of m+n elements into two equal halves, where the left half has all elements smaller than the right half. You can binary search for this partition point in the smaller array."
+      },
+      {
+        "direction": "Perform a binary search on the smaller array, A. A cut at index i in A determines a corresponding cut j in array B. The cuts are correct if A[i-1] <= B[j] and B[j-1] <= A[i]. If A[i-1] > B[j], your cut in A is too far right. If B[j-1] > A[i], your cut in A is too far left. Adjust the binary search range accordingly. Handle the edge cases of partitions being at the ends."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 500,
+      "p25_s": 350,
+      "p75_s": 900
+    },
+    "prerequisites": [
+      "binary-search",
+      "arrays"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "logarithmic_time_complexity",
+          "points": 40
+        },
+        {
+          "component": "partition_edge_cases",
+          "points": 10
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution that performs a binary search on the smaller of the two arrays to find the optimal partition point. The time complexity is O(log(min(m, n))) and the space complexity is O(1).",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Identify the smaller array (x) and larger array (y).",
+        "pseudocode": "if len(x) > len(y): return findMedian(y, x)",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Start binary search on the smaller array.",
+        "pseudocode": "low = 0, high = len(x)",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Inside loop, calculate partitions for both arrays.",
+        "pseudocode": "partitionX = (low + high) // 2\npartitionY = (len(x) + len(y) + 1) // 2 - partitionX",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Determine the four boundary elements, handling edge cases.",
+        "pseudocode": "maxLeftX = x[partitionX - 1] if partitionX != 0 else -infinity\n...",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Check if the partitions are correct.",
+        "pseudocode": "if maxLeftX <= minRightY and maxLeftY <= minRightX:",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If correct, calculate and return the median.",
+        "pseudocode": "if (len(x) + len(y)) % 2 == 0: ...\nelse: ...",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Adjust the binary search range if partitions are incorrect.",
+        "pseudocode": "elif maxLeftX > minRightY: high = partitionX - 1\nelse: low = partitionX + 1",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "One of the arrays is empty.",
+      "The partitions fall at the very beginning or end of an array.",
+      "All elements in one array are smaller than all elements in the other."
+    ],
+    "learning_objectives": [
+      "advanced_binary_search",
+      "partitioning_logic",
+      "divide-and-conquer_strategy"
+    ],
+    "related_problems": []
+  },
+  {
+    "id": "dsa-hard-005",
+    "title": "Word Ladder",
+    "Full_question": "A transformation sequence from beginWord to endWord using a dictionary wordList is a sequence of words beginWord -> s1 -> s2 -> ... -> sk such that: Every adjacent pair of words differs by a single letter. All words from s1 to sk are in wordList. beginWord does not need to be in wordList. sk == endWord. Given beginWord, endWord, and wordList, return the length of the shortest transformation sequence, or 0 if no such sequence exists.",
+    "short_description": "Find the shortest transformation sequence between two words by changing one letter at a time.",
+    "difficulty": {
+      "numeric": 8,
+      "label": "hard"
+    },
+    "concepts": [
+      "graph",
+      "breadth-first-search",
+      "string"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "beginWord": "hit",
+          "endWord": "cog",
+          "wordList": ["hot", "dot", "dog", "lot", "log", "cog"]
+        },
+        "output": 5
+      },
+      {
+        "input": {
+          "beginWord": "hit",
+          "endWord": "cog",
+          "wordList": ["hot", "dot", "dog", "lot", "log"]
+        },
+        "output": 0
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "beginWord": "a",
+          "endWord": "c",
+          "wordList": ["a", "b", "c"]
+        },
+        "output": 2
+      },
+      {
+        "input": {
+          "beginWord": "same",
+          "endWord": "same",
+          "wordList": ["same"]
+        },
+        "output": 1
+      }
+    ],
+    "constraints": {
+      "time_ms": 2000,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "This problem is equivalent to finding the shortest path in an unweighted graph, making Breadth-First Search (BFS) the ideal algorithm.\nPre-process the wordList into a set for efficient O(1) lookups.\nInitialize a queue and add the starting tuple (beginWord, 1), where 1 is the initial path length.\nInitialize a set visited to keep track of words already processed.\nWhile the queue is not empty:\na. Dequeue the current (word, length).\nb. Generate all possible one-letter-different transformations of the word.\nc. For each new transformation:\ni. If transformation is the endWord, return length + 1.\nii. If transformation is in the wordList set and has not been visited, add it to the visited set and enqueue (transformation, length + 1).\nIf the queue empties before reaching the endWord, no such path exists, so return 0.",
+    "hint_templates": [
+      {
+        "nudge": "The problem asks for the shortest sequence. Which graph traversal algorithm guarantees finding the shortest path in a graph where all edge weights are equal?"
+      },
+      {
+        "guide": "Treat this as a graph problem where words are nodes. An edge connects two words if they differ by one letter. Use Breadth-First Search (BFS) starting from beginWord to explore the graph level by level, which will find the shortest path to endWord."
+      },
+      {
+        "direction": "Use a queue for BFS and a set for wordList for fast lookups. Start with (beginWord, 1) in the queue. In a loop, pop a word. Find all its valid neighbors (one letter difference, present in the word set). For each neighbor, if it's the end word, you're done. Otherwise, add it to the queue with an incremented length and remove it from the word set to mark it as visited."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 400,
+      "p25_s": 200,
+      "p75_s": 750
+    },
+    "prerequisites": [
+      "breadth-first-search",
+      "graphs",
+      "sets",
+      "string-manipulation"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "BFS_implementation",
+          "points": 30
+        },
+        {
+          "component": "neighbor_generation_logic",
+          "points": 20
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution implementing BFS. To optimize neighbor generation, for each word, iterate through its characters and substitute each with 'a' through 'z'. Time complexity is O(M^2 * N), where M is the length of the words and N is the number of words in the list, as generating neighbors takes M*26, and we might do this for all N words. Space complexity is O(M*N) for the queue and visited set.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Convert wordList to a set for fast lookups.",
+        "pseudocode": "word_set = set(wordList)",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Initialize a queue with the starting word and length 1.",
+        "pseudocode": "queue = collections.deque([(beginWord, 1)])",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Loop while the queue is not empty.",
+        "pseudocode": "while queue:",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Dequeue the current word and its path length.",
+        "pseudocode": "word, length = queue.popleft()",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "If the current word is the end word, return the length.",
+        "pseudocode": "if word == endWord: return length",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "Generate all possible neighbors by changing one character.",
+        "pseudocode": "for i in range(len(word)):\n for char in 'abcdefghijklmnopqrstuvwxyz':\n next_word = word[:i] + char + word[i+1:]",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "If a neighbor is in the set, process it.",
+        "pseudocode": "if next_word in word_set:",
+        "test_exs": []
+      },
+      {
+        "id": "s8",
+        "description": "Remove from set to mark as visited and enqueue it.",
+        "pseudocode": "word_set.remove(next_word)\nqueue.append((next_word, length + 1))",
+        "test_exs": []
+      },
+      {
+        "id": "s9",
+        "description": "If the loop finishes, no path was found.",
+        "pseudocode": "return 0",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "endWord is not in wordList.",
+      "No transformation sequence exists.",
+      "beginWord is the same as endWord."
+    ],
+    "learning_objectives": [
+      "graph_modeling",
+      "bfs_for_shortest_path",
+      "implicit_graph_traversal"
+    ],
+    "related_problems": [
+      "dsa-hard-word-ladder-ii",
+      "dsa-medium-number-of-islands"
+    ]
+  },
+  {
+    "id": "dsa-hard-006",
+    "title": "Sliding Window Maximum",
+    "Full_question": "You are given an array of integers nums, there is a sliding window of size k which is moving from the very left of the array to the very right. You can only see the k numbers in the window. Each time the sliding window moves right by one position. Return the max sliding window.",
+    "short_description": "Find the maximum value in a sliding window of size k as it moves across an array.",
+    "difficulty": {
+      "numeric": 8,
+      "label": "hard"
+    },
+    "concepts": [
+      "array",
+      "sliding-window",
+      "deque",
+      "monotonic-queue"
+    ],
+    "public_tests": [
+      {
+        "input": {
+          "nums": [1, 3, -1, -3, 5, 3, 6, 7],
+          "k": 3
+        },
+        "output": [3, 3, 5, 5, 6, 7]
+      },
+      {
+        "input": {
+          "nums": [1],
+          "k": 1
+        },
+        "output": [1]
+      }
+    ],
+    "hidden_tests": [
+      {
+        "input": {
+          "nums": [1, -1],
+          "k": 2
+        },
+        "output": [1]
+      },
+      {
+        "input": {
+          "nums": [9, 10, 9, -7, -4, -8, 2, -6],
+          "k": 5
+        },
+        "output": [10, 10, 9, 2, 2]
+      },
+      {
+        "input": {
+          "nums": [7, 2, 4],
+          "k": 2
+        },
+        "output": [7, 4]
+      }
+    ],
+    "constraints": {
+      "time_ms": 1500,
+      "memory_mb": 256,
+      "allowed_libs": ["standard"],
+      "forbidden_calls": []
+    },
+    "canonical_skeleton": "An efficient O(n) solution uses a double-ended queue (deque) to maintain a monotonically decreasing list of indices. The index at the front of the deque always corresponds to the maximum element in the current window.\nInitialize an empty deque and a result array.\nIterate through the input array nums with index i.\nClean the deque from the front: Remove indices from the front of the deque that are no longer part of the current window (i.e., index <= i - k).\nClean the deque from the back: While the deque is not empty and the element corresponding to the index at the back is less than the current element nums[i], pop from the back. This ensures the deque remains monotonically decreasing.\nAppend the current index i to the back of the deque.\nOnce the first full window is formed (i >= k - 1), the maximum element for that window is nums[deque.front()]. Append this to the result array.\nReturn the result array.",
+    "hint_templates": [
+      {
+        "nudge": "A naive approach of finding the max in each window is too slow. As the window slides, how can you efficiently update the maximum without re-scanning? Think about which elements can never be the maximum."
+      },
+      {
+        "guide": "Use a double-ended queue (deque) to store indices of elements. The deque should be structured so that the index of the largest element is always at the front. It should also only contain indices of elements that are potentially the maximum."
+      },
+      {
+        "direction": "Maintain a deque of indices that is 'monotonically decreasing' based on the values in nums. When considering a new element nums[i], first, pop indices from the right of the deque if their corresponding values are smaller than nums[i]. Then, add i to the deque. Also, pop any index from the left if it's now out of the window. For each window, the maximum is simply the element at the index found at the front of the deque."
+      }
+    ],
+    "typical_time_stats": {
+      "median_s": 400,
+      "p25_s": 250,
+      "p75_s": 700
+    },
+    "prerequisites": [
+      "sliding-window",
+      "queues",
+      "deques"
+    ],
+    "reveal_policy": "on_request",
+    "scoring_rubric": {
+      "points_total": 100,
+      "breakdown": [
+        {
+          "component": "correctness",
+          "points": 50
+        },
+        {
+          "component": "O(n)_time_complexity",
+          "points": 40
+        },
+        {
+          "component": "deque_logic",
+          "points": 10
+        }
+      ]
+    },
+    "canonical_solution": "(hidden) A Python solution using collections.deque. This monotonic queue approach achieves O(n) time complexity because each index is added to and removed from the deque at most once. The space complexity is O(k) to store the indices in the deque.",
+    "solution_steps": [
+      {
+        "id": "s1",
+        "description": "Initialize a result array and a deque.",
+        "pseudocode": "result = []\ndq = collections.deque()",
+        "test_exs": []
+      },
+      {
+        "id": "s2",
+        "description": "Iterate through the array with index i.",
+        "pseudocode": "for i in range(len(nums)):",
+        "test_exs": []
+      },
+      {
+        "id": "s3",
+        "description": "Remove indices from the front that are out of the window.",
+        "pseudocode": "if dq and dq[0] == i - k:\n dq.popleft()",
+        "test_exs": []
+      },
+      {
+        "id": "s4",
+        "description": "Remove indices of smaller elements from the back.",
+        "pseudocode": "while dq and nums[dq[-1]] < nums[i]:\n dq.pop()",
+        "test_exs": []
+      },
+      {
+        "id": "s5",
+        "description": "Add the current index to the deque.",
+        "pseudocode": "dq.append(i)",
+        "test_exs": []
+      },
+      {
+        "id": "s6",
+        "description": "If the window is formed, add the max to the result.",
+        "pseudocode": "if i >= k - 1:\n result.append(nums[dq[0]])",
+        "test_exs": []
+      },
+      {
+        "id": "s7",
+        "description": "Return the result array.",
+        "pseudocode": "return result",
+        "test_exs": []
+      }
+    ],
+    "edge_cases": [
+      "k is 1.",
+      "k is equal to the length of the array.",
+      "Array is sorted in increasing or decreasing order."
+    ],
+    "learning_objectives": [
+      "monotonic_queue_pattern",
+      "advanced_deque_applications",
+      "amortized_analysis_of_loops"
+    ],
+    "related_problems": [
+      "dsa-medium-min-stack"
+    ]
+  }
+]

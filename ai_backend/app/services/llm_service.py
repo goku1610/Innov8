@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -118,17 +119,61 @@ async def _apply_patch(previous_code: str, patch_text: str) -> str:
     return new_text
 
 
-async def generate_text_response_full(code: str, session_id: Optional[str], metrics: Optional[dict] = None) -> str:
+def _extract_question_text(question_json: Optional[object]) -> Optional[str]:
+    """Return only the plain problem text from a rich question object.
+
+    Tries a set of common keys and falls back to None if not found.
+    """
+    if not question_json:
+        return None
+    if isinstance(question_json, str):
+        stripped = question_json.strip()
+        return stripped or None
+    if isinstance(question_json, dict):
+        candidate_keys = [
+            "Full_question",
+            "full_question",
+            "fullQuestion",
+            "problem",
+            "problem_text",
+            "problemStatement",
+            "problem_statement",
+            "description",
+            "short_description",
+            "statement",
+            "question",
+            "prompt",
+            "body",
+            "text",
+            "content",
+        ]
+        for key in candidate_keys:
+            try:
+                value = question_json.get(key)
+            except Exception:
+                value = None
+            if isinstance(value, str):
+                stripped = value.strip()
+                if stripped:
+                    return stripped
+    return None
+
+
+async def generate_text_response_full(code: str, session_id: Optional[str], metrics: Optional[dict] = None, question_json: Optional[dict] = None) -> str:
     # Progressive timestamp in seconds: 30, 60, 90, ... based on snapshot count
     progressive_ts = None
     try:
         if session_id:
             count = await count_snapshots_by_session(session_id)
-            progressive_ts = (count + 1) * 30  # next tick in seconds
+            progressive_ts = (count + 1) * 60  # next tick in seconds
     except Exception:
         progressive_ts = None
 
     context_sections = await _build_compact_context_from_mongo(session_id)
+    # Include only the plain problem text (not the full question JSON)
+    question_text = _extract_question_text(question_json)
+    if question_text:
+        context_sections = ["QUESTION:", question_text] + context_sections
     # Merge in progressive timestamp if metrics is used
     use_metrics = dict(metrics or {})
     if progressive_ts is not None:
@@ -272,6 +317,16 @@ codeJSON
   "required": ["should_call_llm", "reasoning"]
 }"""
     
+    # Print full prompts to backend stdout for visibility during development
+    try:
+        print("\n================ SYSTEM PROMPT ================\n")
+        print(system_prompt)
+        print("\n================= USER PROMPT =================\n")
+        print(prompt)
+        print("\n===============================================\n")
+    except Exception:
+        pass
+
     response = await asyncio.to_thread(generate_response, prompt, system_prompt)
 
     # Best-effort file log
@@ -297,7 +352,7 @@ codeJSON
     return response
 
 
-async def generate_text_response_patch(patch_text: str, session_id: Optional[str], metrics_patch: Optional[dict] = None) -> str:
+async def generate_text_response_patch(patch_text: str, session_id: Optional[str], metrics_patch: Optional[dict] = None, question_json: Optional[dict] = None) -> str:
     if not session_id:
         # Cannot apply patch without a session context; fallback to no-op code
         code = ""
@@ -311,6 +366,6 @@ async def generate_text_response_patch(patch_text: str, session_id: Optional[str
         if metrics_patch:
             merged_metrics.update(metrics_patch)
 
-    return await generate_text_response_full(code, session_id, merged_metrics)
+    return await generate_text_response_full(code, session_id, merged_metrics, question_json)
 
 
