@@ -9,8 +9,8 @@ A secure code execution platform with Docker sandboxing, built with React fronte
 - **Responsive Design**: Works on desktop and mobile
 
 ## Architecture
-![Architecture Diagram](architecture.png)
-![](agent_architecture.png)
+![Architecture Diagram](Agent Architecture.png)
+![](Agent Architecture.png)
 
 ### Frontend (React + TypeScript)
 - Monaco Editor for code editing
